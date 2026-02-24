@@ -6,7 +6,7 @@ import { Mp3Encoder } from "@breezystack/lamejs";
  */
 export async function compressToMp3(
   file: File,
-  kbps = 96
+  kbps: number
 ): Promise<Blob> {
   // 1. Decode the file into raw PCM using the browser's AudioContext
   const arrayBuffer = await file.arrayBuffer();

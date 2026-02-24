@@ -102,7 +102,7 @@ export default function RecordPage() {
     }
     try {
       setCompressing(true);
-      const mp3Blob = await compressToMp3(file, 96);
+      const mp3Blob = await compressToMp3(file, 64);
 
       // Netlify Functions have a ~6 MB body limit (AWS Lambda)
       const MAX_UPLOAD = 5.5 * 1024 * 1024;
