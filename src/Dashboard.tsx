@@ -26,8 +26,8 @@ import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import AddIcon from "@mui/icons-material/Add";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import PublicIcon from "@mui/icons-material/Public";
 import { useAuth } from "./AuthContext";
+import appIcon from "./assets/icon.png";
 import {
   getProjects,
   getProject,
@@ -110,7 +110,12 @@ export default function Dashboard() {
         }}
       >
         <Toolbar sx={{ gap: 1 }}>
-          <PublicIcon color="primary" />
+          <Box
+            component="img"
+            src={appIcon}
+            alt="App icon"
+            sx={{ width: 32, height: 32 }}
+          />
           <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>
             {project?.name ?? "Audio Project Manager"}
           </Typography>
