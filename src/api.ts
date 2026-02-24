@@ -186,9 +186,19 @@ export async function uploadAudio(
     },
     body: mp3Blob,
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Failed to upload audio");
-  return data;
+  if (!res.ok) {
+    // Netlify may return plain text "Internal Error" for oversized payloads
+    const text = await res.text();
+    let message = "Failed to upload audio";
+    try {
+      const json = JSON.parse(text);
+      message = json.error || message;
+    } catch {
+      message = text || message;
+    }
+    throw new Error(message);
+  }
+  return await res.json();
 }
 
 export function getAudioUrl(passageId: number): string {

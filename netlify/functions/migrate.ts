@@ -38,7 +38,20 @@ export default async function handler(_req: Request, _context: Context) {
       reference VARCHAR(255) NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       sort_order INTEGER NOT NULL DEFAULT 0,
+      audio_key VARCHAR(255),
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+  `;
+
+  // Add audio_key column if it doesn't exist (for existing databases)
+  await sql`
+    ALTER TABLE passages
+    ADD COLUMN IF NOT EXISTS audio_key VARCHAR(255)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS speakers (
+      name VARCHAR(255) PRIMARY KEY
     )
   `;
 

@@ -96,6 +96,15 @@ export default function RecordPage() {
       setCompressing(true);
       const mp3Blob = await compressToMp3(file, 96);
 
+      // Netlify Functions have a ~6 MB body limit (AWS Lambda)
+      const MAX_UPLOAD = 5.5 * 1024 * 1024;
+      if (mp3Blob.size > MAX_UPLOAD) {
+        const sizeMB = (mp3Blob.size / (1024 * 1024)).toFixed(1);
+        throw new Error(
+          `Compressed audio is ${sizeMB} MB — exceeds the 5.5 MB upload limit. Try a shorter recording.`
+        );
+      }
+
       setCompressing(false);
       setUploading(true);
       await uploadAudio(token, passageId, mp3Blob);

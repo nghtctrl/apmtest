@@ -34,6 +34,7 @@ export default async function handler(req: Request, _context: Context) {
   const user = getUser(req);
   if (!user) return unauthorized();
 
+  try {
   const sql = getDb();
   const url = new URL(req.url);
   const method = req.method;
@@ -50,9 +51,9 @@ export default async function handler(req: Request, _context: Context) {
       return jsonRes({ error: "No audio data provided" }, 400);
     }
 
-    // Enforce a 10 MB limit
-    if (body.byteLength > 10 * 1024 * 1024) {
-      return jsonRes({ error: "Audio file too large (max 10 MB)" }, 413);
+    // Enforce a 5.5 MB limit (Netlify/Lambda payload limit is ~6 MB)
+    if (body.byteLength > 5.5 * 1024 * 1024) {
+      return jsonRes({ error: "Audio file too large (max 5.5 MB)" }, 413);
     }
 
     const blobKey = `passage-${passageId}.mp3`;
@@ -110,4 +111,9 @@ export default async function handler(req: Request, _context: Context) {
   }
 
   return jsonRes({ error: "Method not allowed" }, 405);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Internal server error";
+    console.error("audio function error:", err);
+    return jsonRes({ error: message }, 500);
+  }
 }
