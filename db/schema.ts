@@ -27,5 +27,10 @@ export const passages = pgTable('passages', {
     reference: varchar('reference', { length: 255 }).notNull(),
     description: text('description').notNull().default(''),
     sortOrder: integer('sort_order').notNull().default(0),
+    audioKey: varchar('audio_key', { length: 255 }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+export const speakers = pgTable('speakers', {
+    name: varchar('name', { length: 255 }).primaryKey(),
 });

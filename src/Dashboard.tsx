@@ -389,6 +389,7 @@ function ProjectOverviewTab({
               onDataChanged={onDataChanged}
               addPassageMode={addPassageMode}
               onInsertPassage={handleAddPassage}
+              projectName={project?.name ?? ""}
             />
           ))
         )}
@@ -406,6 +407,7 @@ function SectionRow({
   onDataChanged,
   addPassageMode,
   onInsertPassage,
+  projectName,
 }: {
   section: Section;
   token: string | null;
@@ -413,6 +415,7 @@ function SectionRow({
   onDataChanged: () => Promise<void>;
   addPassageMode: boolean;
   onInsertPassage: (sectionId: number, sortOrder: number) => Promise<void>;
+  projectName: string;
 }) {
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -526,6 +529,7 @@ function SectionRow({
                   token={token}
                   setLoading={setLoading}
                   onDataChanged={onDataChanged}
+                  projectName={projectName}
                 />
                 {/* Trailing + slot after each card */}
                 {addPassageMode && (
@@ -580,13 +584,16 @@ function PassageCard({
   token,
   setLoading,
   onDataChanged,
+  projectName,
 }: {
   passage: Passage;
   disabled?: boolean;
   token: string | null;
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
   onDataChanged: () => Promise<void>;
+  projectName: string;
 }) {
+  const navigate = useNavigate();
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
 
@@ -691,6 +698,15 @@ function PassageCard({
             justifyContent: "space-between",
           }}
           endIcon={<ChevronRightIcon />}
+          onClick={() =>
+            navigate("/record", {
+              state: {
+                passageId: passage.id,
+                passageReference: passage.reference,
+                projectName,
+              },
+            })
+          }
         >
           Record
         </Button>

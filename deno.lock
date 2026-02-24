@@ -11,12 +11,14 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@breezystack/lamejs@^1.2.7",
         "npm:@emotion/react@^11.14.0",
         "npm:@emotion/styled@^11.14.1",
         "npm:@eslint/js@^9.39.1",
         "npm:@mui/icons-material@^7.3.8",
         "npm:@mui/material@^7.3.8",
         "npm:@neondatabase/serverless@^1.0.2",
+        "npm:@netlify/blobs@^10.7.0",
         "npm:@netlify/functions@^5.1.2",
         "npm:@netlify/neon@~0.1.2",
         "npm:@types/bcryptjs@^2.4.6",

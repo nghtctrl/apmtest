@@ -173,3 +173,56 @@ export async function renamePassage(
   if (!res.ok) throw new Error(data.error || "Failed to rename passage");
   return data;
 }
+
+export async function uploadAudio(
+  token: string,
+  passageId: number,
+  mp3Blob: Blob
+): Promise<{ success: boolean; audioKey: string }> {
+  const res = await fetch(`${API_BASE}/audio?passageId=${passageId}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: mp3Blob,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to upload audio");
+  return data;
+}
+
+export function getAudioUrl(passageId: number): string {
+  return `${API_BASE}/audio?passageId=${passageId}`;
+}
+
+export interface Speaker {
+  name: string;
+}
+
+export async function getSpeakers(
+  token: string
+): Promise<{ speakers: Speaker[] }> {
+  const res = await fetch(`${API_BASE}/speakers`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to fetch speakers");
+  return data;
+}
+
+export async function createSpeaker(
+  token: string,
+  name: string
+): Promise<{ speaker: Speaker }> {
+  const res = await fetch(`${API_BASE}/speakers`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ name }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to create speaker");
+  return data;
+}
