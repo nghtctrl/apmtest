@@ -141,5 +141,52 @@ export default async function handler(req: Request, _context: Context) {
     return json({ success: true });
   }
 
+  // PATCH /projects — rename a section or passage
+  if (method === "PATCH") {
+    const body = await req.json();
+
+    if (body.sectionId != null) {
+      const { sectionId, name } = body as { sectionId: number; name: string };
+      if (!sectionId || typeof name !== "string" || !name.trim()) {
+        return json({ error: "sectionId and name are required" }, 400);
+      }
+
+      const result = await sql`
+        UPDATE sections
+        SET name = ${name.trim()}
+        WHERE id = ${sectionId}
+        RETURNING *
+      `;
+
+      if (result.length === 0) {
+        return json({ error: "Section not found" }, 404);
+      }
+
+      return json({ section: result[0] });
+    }
+
+    if (body.passageId != null) {
+      const { passageId, reference } = body as { passageId: number; reference: string };
+      if (!passageId || typeof reference !== "string" || !reference.trim()) {
+        return json({ error: "passageId and reference are required" }, 400);
+      }
+
+      const result = await sql`
+        UPDATE passages
+        SET reference = ${reference.trim()}
+        WHERE id = ${passageId}
+        RETURNING *
+      `;
+
+      if (result.length === 0) {
+        return json({ error: "Passage not found" }, 404);
+      }
+
+      return json({ passage: result[0] });
+    }
+
+    return json({ error: "sectionId or passageId is required" }, 400);
+  }
+
   return json({ error: "Not found" }, 404);
 }

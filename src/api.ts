@@ -137,3 +137,39 @@ export async function createPassage(
   if (!res.ok) throw new Error(data.error || "Failed to create passage");
   return data;
 }
+
+export async function renameSection(
+  token: string,
+  sectionId: number,
+  name: string
+): Promise<{ section: Section }> {
+  const res = await fetch(`${API_BASE}/projects`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ sectionId, name }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to rename section");
+  return data;
+}
+
+export async function renamePassage(
+  token: string,
+  passageId: number,
+  reference: string
+): Promise<{ passage: Passage }> {
+  const res = await fetch(`${API_BASE}/projects`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ passageId, reference }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to rename passage");
+  return data;
+}

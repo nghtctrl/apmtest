@@ -7,11 +7,16 @@ import {
   Button,
   Card,
   CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
+  TextField,
   Tab,
   Tabs,
   Toolbar,
@@ -21,6 +26,7 @@ import {
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
@@ -34,6 +40,9 @@ import {
   createSection,
   deleteSection,
   createPassage,
+  renameSection,
+  renamePassage,
+  type Passage,
   type Project,
   type Section,
 } from "./api";
@@ -94,7 +103,7 @@ export default function Dashboard() {
     >
       <Backdrop
         open={loading}
-        sx={{ zIndex: (theme) => theme.zIndex.drawer + 2 }}
+        sx={{ zIndex: (theme) => theme.zIndex.modal + 1 }}
       >
         <CircularProgress color="inherit" />
       </Backdrop>
@@ -406,6 +415,7 @@ function SectionRow({
   onInsertPassage: (sectionId: number, sortOrder: number) => Promise<void>;
 }) {
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [renameOpen, setRenameOpen] = useState(false);
 
   const handleDelete = async () => {
     setMenuAnchor(null);
@@ -416,6 +426,19 @@ function SectionRow({
       await onDataChanged();
     } catch (err) {
       console.error("Failed to delete section", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRename = async (name: string) => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      await renameSection(token, section.id, name);
+      await onDataChanged();
+    } catch (err) {
+      console.error("Failed to rename section", err);
     } finally {
       setLoading(false);
     }
@@ -442,6 +465,17 @@ function SectionRow({
           open={Boolean(menuAnchor)}
           onClose={() => setMenuAnchor(null)}
         >
+          <MenuItem
+            onClick={() => {
+              setMenuAnchor(null);
+              setRenameOpen(true);
+            }}
+          >
+            <ListItemIcon>
+              <EditIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Rename...</ListItemText>
+          </MenuItem>
           <MenuItem onClick={handleDelete}>
             <ListItemIcon>
               <DeleteIcon fontSize="small" />
@@ -449,6 +483,17 @@ function SectionRow({
             <ListItemText>Delete...</ListItemText>
           </MenuItem>
         </Menu>
+        <RenameDialog
+          open={renameOpen}
+          title="Rename Section"
+          label="Section name"
+          initialValue={section.name}
+          onCancel={() => setRenameOpen(false)}
+          onConfirm={async (value) => {
+            await handleRename(value);
+            setRenameOpen(false);
+          }}
+        />
       </Box>
 
       {/* Horizontally scrollable passage cards */}
@@ -475,7 +520,13 @@ function SectionRow({
             )}
             {section.passages.map((passage) => (
               <Box key={passage.id} sx={{ display: "flex", gap: 2 }}>
-                <PassageCard passage={passage} disabled={addPassageMode} />
+                <PassageCard
+                  passage={passage}
+                  disabled={addPassageMode}
+                  token={token}
+                  setLoading={setLoading}
+                  onDataChanged={onDataChanged}
+                />
                 {/* Trailing + slot after each card */}
                 {addPassageMode && (
                   <InsertSlot
@@ -526,10 +577,32 @@ function InsertSlot({ onClick }: { onClick: () => void }) {
 function PassageCard({
   passage,
   disabled,
+  token,
+  setLoading,
+  onDataChanged,
 }: {
-  passage: { id: number; reference: string; description: string };
+  passage: Passage;
   disabled?: boolean;
+  token: string | null;
+  setLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  onDataChanged: () => Promise<void>;
 }) {
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [renameOpen, setRenameOpen] = useState(false);
+
+  const handleRename = async (reference: string) => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      await renamePassage(token, passage.id, reference);
+      await onDataChanged();
+    } catch (err) {
+      console.error("Failed to rename passage", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Card
       variant="outlined"
@@ -561,9 +634,41 @@ function PassageCard({
               <PlayCircleOutlineIcon />
             </IconButton>
           </Box>
-          <IconButton size="small">
+          <IconButton
+            size="small"
+            onClick={(e) => setMenuAnchor(e.currentTarget)}
+            disabled={disabled}
+          >
             <MoreVertIcon />
           </IconButton>
+          <Menu
+            anchorEl={menuAnchor}
+            open={Boolean(menuAnchor)}
+            onClose={() => setMenuAnchor(null)}
+          >
+            <MenuItem
+              onClick={() => {
+                setMenuAnchor(null);
+                setRenameOpen(true);
+              }}
+            >
+              <ListItemIcon>
+                <EditIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Rename...</ListItemText>
+            </MenuItem>
+          </Menu>
+          <RenameDialog
+            open={renameOpen}
+            title="Rename Passage"
+            label="Passage name"
+            initialValue={passage.reference}
+            onCancel={() => setRenameOpen(false)}
+            onConfirm={async (value) => {
+              await handleRename(value);
+              setRenameOpen(false);
+            }}
+          />
         </Box>
         {passage.description && (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -591,6 +696,61 @@ function PassageCard({
         </Button>
       </Box>
     </Card>
+  );
+}
+
+function RenameDialog({
+  open,
+  title,
+  label,
+  initialValue,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  label: string;
+  initialValue: string;
+  onCancel: () => void;
+  onConfirm: (value: string) => Promise<void>;
+}) {
+  const [value, setValue] = useState(initialValue);
+
+  useEffect(() => {
+    if (open) {
+      setValue(initialValue);
+    }
+  }, [open, initialValue]);
+
+  const trimmedValue = value.trim();
+  const handleConfirm = () => onConfirm(trimmedValue);
+
+  return (
+    <Dialog open={open} onClose={onCancel} fullWidth maxWidth="xs">
+      <DialogTitle>{title}</DialogTitle>
+      <DialogContent>
+        <TextField
+          autoFocus
+          margin="dense"
+          fullWidth
+          label={label}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && trimmedValue) {
+              e.preventDefault();
+              handleConfirm();
+            }
+          }}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel}>Cancel</Button>
+        <Button variant="primary" onClick={handleConfirm} disabled={!trimmedValue}>
+          Confirm
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
