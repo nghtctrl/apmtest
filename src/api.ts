@@ -205,6 +205,18 @@ export function getAudioUrl(passageId: number): string {
   return `${API_BASE}/audio?passageId=${passageId}`;
 }
 
+export async function fetchAudio(
+  token: string,
+  passageId: number
+): Promise<Blob | null> {
+  const res = await fetch(`${API_BASE}/audio?passageId=${passageId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) return null;
+  return await res.blob();
+}
+
 export interface Speaker {
   name: string;
 }

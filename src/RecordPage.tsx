@@ -22,7 +22,7 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 
 import { useAuth } from "./AuthContext";
-import { uploadAudio, getSpeakers, type Speaker } from "./api";
+import { uploadAudio, fetchAudio, getSpeakers, type Speaker } from "./api";
 import { compressToMp3 } from "./audioUtils";
 import SpeakerDialog from "./SpeakerDialog";
 import { AudioPlayer } from "./AudioPlayer";
@@ -80,6 +80,14 @@ export default function RecordPage() {
       .then((data) => setSpeakers(data.speakers))
       .catch(() => {/* silent — list will just be empty */});
   }, [token]);
+
+  // Load existing audio for this passage on mount
+  useEffect(() => {
+    if (!token || !passageId) return;
+    fetchAudio(token, passageId).then((blob) => {
+      if (blob) setAudioBlob(blob);
+    });
+  }, [token, passageId]);
 
   const busy = compressing || uploading;
 
