@@ -4,15 +4,22 @@ import React, {
   useImperativeHandle,
   useRef,
   useState,
-} from 'react';
-import WaveSurfer from 'wavesurfer.js';
-import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions';
-import RecordPlugin from 'wavesurfer.js/dist/plugins/record';
-import { Box, IconButton, Menu, MenuItem, Stack, Typography } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
-import { formatTime } from './formatTime';
+} from "react";
+import WaveSurfer from "wavesurfer.js";
+import RegionsPlugin from "wavesurfer.js/dist/plugins/regions";
+import RecordPlugin from "wavesurfer.js/dist/plugins/record";
+import {
+  Box,
+  IconButton,
+  Menu,
+  MenuItem,
+  Stack,
+  Typography,
+} from "@mui/material";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import PauseIcon from "@mui/icons-material/Pause";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import { formatTime } from "./formatTime";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -77,8 +84,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       markers,
       enableDragSelection = false,
       onMarkerClick,
-      waveColor = '#9fc5e8',
-      progressColor = '#9fc5e8',
+      waveColor = "#9fc5e8",
+      progressColor = "#9fc5e8",
       height = 80,
       formatTimeDisplay,
       onTimeUpdate,
@@ -86,7 +93,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       onRecordingComplete,
       children,
     },
-    ref
+    ref,
   ) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const wsRef = useRef<WaveSurfer | null>(null);
@@ -100,7 +107,10 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
 
     // Internal selection state (managed when enableDragSelection is true)
-    const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
+    const [selection, setSelection] = useState<{
+      start: number;
+      end: number;
+    } | null>(null);
     const selectionRef = useRef(selection);
     useEffect(() => {
       selectionRef.current = selection;
@@ -157,7 +167,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         container: containerRef.current,
         waveColor,
         progressColor,
-        cursorColor: '#333',
+        cursorColor: "#333",
         cursorWidth: 4,
         barWidth: 2,
         height,
@@ -166,23 +176,25 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       });
       wsRef.current = ws;
 
-      const record = ws.registerPlugin(RecordPlugin.create({
-        scrollingWaveform: true,
-        renderRecordedAudio: true,
-      }));
+      const record = ws.registerPlugin(
+        RecordPlugin.create({
+          scrollingWaveform: true,
+          renderRecordedAudio: true,
+        }),
+      );
       recordRef.current = record;
 
-      record.on('record-end', (blob: Blob) => {
+      record.on("record-end", (blob: Blob) => {
         recordedBlobRef.current = blob;
         onRecordingCompleteRef.current?.(blob);
       });
 
       if (enableDragSelection) {
-        wsRegions.enableDragSelection({ color: 'rgba(0, 0, 0, 0.1)' });
+        wsRegions.enableDragSelection({ color: "rgba(0, 0, 0, 0.1)" });
       }
 
       // --- Region events (drag-selection) ---
-      wsRegions.on('region-created', (region) => {
+      wsRegions.on("region-created", (region) => {
         if (region.start === region.end) return; // marker, ignore
         if (programmaticRef.current) return;
 
@@ -194,20 +206,20 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         ws.setTime(region.start);
       });
 
-      wsRegions.on('region-updated', (region) => {
+      wsRegions.on("region-updated", (region) => {
         if (region.start === region.end) return;
         setSelection({ start: region.start, end: region.end });
         ws.setTime(region.start);
       });
 
-      wsRegions.on('region-clicked', (region, e) => {
+      wsRegions.on("region-clicked", (region, e) => {
         if (region.start !== region.end) {
           e.stopPropagation();
         }
       });
 
       // --- Waveform click ---
-      ws.on('click', (relativeX) => {
+      ws.on("click", (relativeX) => {
         const waveformWidth = containerRef.current?.clientWidth || 1;
         const audioDuration = ws.getDuration() || 1;
         const clickTime = relativeX * audioDuration;
@@ -219,7 +231,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           .getRegions()
           .find(
             (r) =>
-              r.start === r.end && Math.abs(clickTime - r.start) <= toleranceSec
+              r.start === r.end &&
+              Math.abs(clickTime - r.start) <= toleranceSec,
           );
         if (clickedMarker) {
           onMarkerClickRef.current?.(clickedMarker.start);
@@ -233,7 +246,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       });
 
       // --- Playback events ---
-      ws.on('timeupdate', (time) => {
+      ws.on("timeupdate", (time) => {
         setCurrentTime(time);
         onTimeUpdateRef.current?.(time);
         // Stop playback at selection end
@@ -243,11 +256,11 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           setPlaying(false);
         }
       });
-      ws.on('decode', (d) => {
+      ws.on("decode", (d) => {
         setDuration(d);
         onReadyRef.current?.(d);
       });
-      ws.on('finish', () => setPlaying(false));
+      ws.on("finish", () => setPlaying(false));
 
       return () => {
         ws.destroy();
@@ -263,11 +276,14 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       const ws = wsRef.current;
       if (!ws || !audioSource) return;
       // Skip reload if this blob was just rendered by the RecordPlugin
-      if (audioSource instanceof Blob && audioSource === recordedBlobRef.current) {
+      if (
+        audioSource instanceof Blob &&
+        audioSource === recordedBlobRef.current
+      ) {
         recordedBlobRef.current = null;
         return;
       }
-      if (typeof audioSource === 'string') {
+      if (typeof audioSource === "string") {
         ws.load(audioSource);
       } else {
         const url = URL.createObjectURL(audioSource);
@@ -291,7 +307,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           id: `marker-${i}`,
           start: m.time,
           end: m.time,
-          color: m.color ?? 'rgba(0, 0, 0, 0.5)',
+          color: m.color ?? "rgba(0, 0, 0, 0.5)",
           drag: false,
           resize: false,
         });
@@ -330,19 +346,17 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           <IconButton
             onClick={handlePlayToggle}
             sx={{ p: 0 }}
-            aria-label={playing ? 'pause' : 'play'}
+            aria-label={playing ? "pause" : "play"}
           >
             {playing ? (
-              <PauseIcon fontSize="large" sx={{ color: 'neutral.main' }} />
+              <PauseIcon fontSize="large" sx={{ color: "neutral.main" }} />
             ) : (
-              <PlayArrowIcon fontSize="large" sx={{ color: 'neutral.main' }} />
+              <PlayArrowIcon fontSize="large" sx={{ color: "neutral.main" }} />
             )}
           </IconButton>
           <Typography variant="body2">{timeText}</Typography>
           <Box sx={{ flexGrow: 1 }} />
-          <IconButton
-            onClick={handleMenuOpen}
-          >
+          <IconButton onClick={handleMenuOpen}>
             <MoreVertIcon />
           </IconButton>
         </Stack>
@@ -360,17 +374,17 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           aria-label="Waveform"
           sx={{
             height,
-            bgcolor: 'action.hover',
+            bgcolor: "action.hover",
             my: 1,
             borderRadius: 1,
-            overflow: 'hidden',
-            width: '100%',
+            overflow: "hidden",
+            width: "100%",
           }}
         />
         {children}
       </Box>
     );
-  }
+  },
 );
 
-AudioPlayer.displayName = 'AudioPlayer';
+AudioPlayer.displayName = "AudioPlayer";
