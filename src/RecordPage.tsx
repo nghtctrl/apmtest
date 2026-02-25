@@ -52,7 +52,19 @@ const STEP_COLORS = [
   "#ccc",
 ];
 
+/**
+ * Thin wrapper that keys the real page on passageId so React fully
+ * unmounts / remounts whenever the user switches passages.
+ */
 export default function RecordPage() {
+  const location = useLocation();
+  const state = (location.state ?? {}) as RecordPageState;
+  const passageId = state.passageId;
+
+  return <RecordPageInner key={passageId} />;
+}
+
+function RecordPageInner() {
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = useAuth();
@@ -93,7 +105,7 @@ export default function RecordPage() {
       .catch(() => {/* silent — list will just be empty */});
   }, [token]);
 
-  // Load existing audio for this passage on mount (or after passage switch)
+  // Load existing audio for this passage on mount
   useEffect(() => {
     if (!token || !passageId) return;
     fetchAudio(token, passageId)
@@ -299,7 +311,6 @@ export default function RecordPage() {
                     onClick={() => {
                       setPassageMenuAnchor(null);
                       if (p.id !== passageId) {
-                        setAudioBlob(null);
                         navigate("/record", {
                           state: {
                             passageId: p.id,
