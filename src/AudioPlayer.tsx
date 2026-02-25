@@ -69,6 +69,9 @@ export interface AudioPlayerProps {
   /** Called when a recording completes (provides the recorded Blob) */
   onRecordingComplete?: (blob: Blob) => void;
 
+  /** Called when the user clicks "Replace AI" in the menu */
+  onReplaceAI?: () => void;
+
   /** Children rendered below the waveform (e.g. helper text) */
   children?: React.ReactNode;
 }
@@ -90,6 +93,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       formatTimeDisplay,
       onTimeUpdate,
       onReady,
+      onReplaceAI,
       onRecordingComplete,
       children,
     },
@@ -331,6 +335,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     };
     const handleReplaceAi = () => {
       handleMenuClose();
+      onReplaceAI?.();
     };
     const isMenuOpen = Boolean(menuAnchorEl);
 

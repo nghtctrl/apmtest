@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from "./AuthContext";
 import LoginPage from "./LoginPage";
 import Dashboard from "./Dashboard";
 import RecordPage from "./RecordPage";
+import ReplaceAIPage from "./ReplaceAIPage";
 
 const PRIMARY_MAIN = "#135CB9";
 const RECORD_READY_RED = "#D32F2F";
@@ -207,6 +208,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <RecordPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/replace-ai"
+        element={
+          <ProtectedRoute>
+            <ReplaceAIPage />
           </ProtectedRoute>
         }
       />

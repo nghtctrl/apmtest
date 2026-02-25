@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  AppBar,
   Box,
   Button,
   Checkbox,
@@ -10,12 +9,8 @@ import {
   Menu,
   MenuItem,
   Snackbar,
-  Toolbar,
   Typography,
 } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
@@ -25,10 +20,17 @@ import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 
 import { useAuth } from "./AuthContext";
-import { uploadAudio, fetchAudio, getSpeakers, getPassageSpeaker, type Speaker } from "./api";
+import {
+  uploadAudio,
+  fetchAudio,
+  getSpeakers,
+  getPassageSpeaker,
+  type Speaker,
+} from "./api";
 import { compressToMp3 } from "./audioUtils";
 import SpeakerDialog from "./SpeakerDialog";
 import { AudioPlayer, type AudioPlayerHandle } from "./AudioPlayer";
+import PageHeader from "./PageHeader";
 
 interface RecordPageState {
   passageId: number;
@@ -71,10 +73,11 @@ function RecordPageInner() {
   const state = (location.state ?? {}) as RecordPageState;
 
   const passageIdFromQuery = Number(
-    new URLSearchParams(location.search).get("passageId")
+    new URLSearchParams(location.search).get("passageId"),
   );
   const passageId =
-    state.passageId || (Number.isFinite(passageIdFromQuery) ? passageIdFromQuery : 0);
+    state.passageId ||
+    (Number.isFinite(passageIdFromQuery) ? passageIdFromQuery : 0);
   const passageReference = state.passageReference ?? "Unknown Passage";
   const projectName = state.projectName ?? "";
   const sectionPassages = state.sectionPassages ?? [];
@@ -90,7 +93,8 @@ function RecordPageInner() {
   const [snackMsg, setSnackMsg] = useState<string | null>(null);
 
   // Passage dropdown state
-  const [passageMenuAnchor, setPassageMenuAnchor] = useState<null | HTMLElement>(null);
+  const [passageMenuAnchor, setPassageMenuAnchor] =
+    useState<null | HTMLElement>(null);
 
   // Speaker state
   const [speakerDialogOpen, setSpeakerDialogOpen] = useState(false);
@@ -102,16 +106,17 @@ function RecordPageInner() {
     if (!token) return;
     getSpeakers(token)
       .then((data) => setSpeakers(data.speakers))
-      .catch(() => {/* silent — list will just be empty */});
+      .catch(() => {
+        /* silent — list will just be empty */
+      });
   }, [token]);
 
   // Load existing audio for this passage on mount
   useEffect(() => {
     if (!token || !passageId) return;
-    fetchAudio(token, passageId)
-      .then((blob) => {
-        if (blob) setAudioBlob(blob);
-      })
+    fetchAudio(token, passageId).then((blob) => {
+      if (blob) setAudioBlob(blob);
+    });
   }, [token, passageId]);
 
   // Load saved speaker for this passage on mount
@@ -135,7 +140,9 @@ function RecordPageInner() {
       return;
     }
     if (!passageId) {
-      setSnackMsg("Missing passage ID. Return to Dashboard and open Record from a passage card.");
+      setSnackMsg(
+        "Missing passage ID. Return to Dashboard and open Record from a passage card.",
+      );
       return;
     }
     try {
@@ -147,7 +154,7 @@ function RecordPageInner() {
       if (mp3Blob.size > MAX_UPLOAD) {
         const sizeMB = (mp3Blob.size / (1024 * 1024)).toFixed(1);
         throw new Error(
-          `Compressed audio is ${sizeMB} MB — exceeds the 5.5 MB upload limit. Try a shorter recording.`
+          `Compressed audio is ${sizeMB} MB — exceeds the 5.5 MB upload limit. Try a shorter recording.`,
         );
       }
 
@@ -159,7 +166,9 @@ function RecordPageInner() {
       setAudioBlob(mp3Blob);
       setSnackMsg("Audio saved!");
     } catch (err) {
-      setSnackMsg(err instanceof Error ? err.message : "Failed to process audio");
+      setSnackMsg(
+        err instanceof Error ? err.message : "Failed to process audio",
+      );
     } finally {
       setCompressing(false);
       setUploading(false);
@@ -172,7 +181,9 @@ function RecordPageInner() {
       return;
     }
     if (!passageId) {
-      setSnackMsg("Missing passage ID. Return to Dashboard and open Record from a passage card.");
+      setSnackMsg(
+        "Missing passage ID. Return to Dashboard and open Record from a passage card.",
+      );
       return;
     }
     fileInputRef.current?.click();
@@ -185,7 +196,9 @@ function RecordPageInner() {
       return;
     }
     if (!passageId) {
-      setSnackMsg("Missing passage ID. Return to Dashboard and open Record from a passage card.");
+      setSnackMsg(
+        "Missing passage ID. Return to Dashboard and open Record from a passage card.",
+      );
       return;
     }
     if (!selectedSpeaker) return;
@@ -198,7 +211,9 @@ function RecordPageInner() {
         setRecording(true);
       } catch {
         setWarmingUp(false);
-        setSnackMsg("Could not access microphone. Please allow microphone access and try again.");
+        setSnackMsg(
+          "Could not access microphone. Please allow microphone access and try again.",
+        );
       }
     } else {
       playerRef.current?.stopRecording();
@@ -219,7 +234,7 @@ function RecordPageInner() {
       if (mp3Blob.size > MAX_UPLOAD) {
         const sizeMB = (mp3Blob.size / (1024 * 1024)).toFixed(1);
         throw new Error(
-          `Compressed audio is ${sizeMB} MB — exceeds the 5.5 MB upload limit. Try a shorter recording.`
+          `Compressed audio is ${sizeMB} MB — exceeds the 5.5 MB upload limit. Try a shorter recording.`,
         );
       }
 
@@ -229,7 +244,9 @@ function RecordPageInner() {
       setAudioBlob(mp3Blob);
       setSnackMsg("Audio saved!");
     } catch (err) {
-      setSnackMsg(err instanceof Error ? err.message : "Failed to process audio");
+      setSnackMsg(
+        err instanceof Error ? err.message : "Failed to process audio",
+      );
     } finally {
       setCompressing(false);
       setUploading(false);
@@ -245,29 +262,7 @@ function RecordPageInner() {
       }}
     >
       {/* ─── Header ───────────────────────────────────────────────── */}
-      <AppBar
-        position="sticky"
-        elevation={0}
-        color="default"
-        sx={{ bgcolor: "#eee" }}
-      >
-        <Toolbar sx={{ gap: 1 }}>
-          <IconButton size="small" onClick={() => navigate("/dashboard")}>
-            <ArrowBackIcon />
-          </IconButton>
-
-          <Typography variant="subtitle1" sx={{ fontWeight: 600, flexGrow: 1 }}>
-            {projectName}
-          </Typography>
-
-          <IconButton size="small">
-            <HelpOutlineIcon />
-          </IconButton>
-          <IconButton size="small">
-            <AccountCircleIcon />
-          </IconButton>
-        </Toolbar>
-
+      <PageHeader title={projectName} onBack={() => navigate("/dashboard")}>
         {/* Racetrack row */}
         <Box
           sx={{
@@ -356,11 +351,9 @@ function RecordPageInner() {
             {/* Empty cell to balance the grid */}
             <Box />
           </Box>
-          <Typography sx={{ mt: 1, fontWeight: 500 }}>
-            Record
-          </Typography>
+          <Typography sx={{ mt: 1, fontWeight: 500 }}>Record</Typography>
         </Box>
-      </AppBar>
+      </PageHeader>
 
       {/* ─── Main Content ─────────────────────────────────────────── */}
       <Box
@@ -398,7 +391,9 @@ function RecordPageInner() {
             {selectedSpeaker || "Select Speaker..."}
           </Button>
           <Button
-            startIcon={busy ? <CircularProgress size={18} /> : <FolderOpenIcon />}
+            startIcon={
+              busy ? <CircularProgress size={18} /> : <FolderOpenIcon />
+            }
             sx={{ width: "100%", maxWidth: 260 }}
             disabled={busy || !selectedSpeaker || recording}
             onClick={handleLoadFromFileClick}
@@ -415,6 +410,17 @@ function RecordPageInner() {
             height={80}
             enableDragSelection
             onRecordingComplete={handleRecordingComplete}
+            onReplaceAI={() =>
+              navigate("/replace-ai", {
+                state: {
+                  passageId,
+                  passageReference,
+                  projectName,
+                  speaker: selectedSpeaker,
+                  sectionPassages,
+                },
+              })
+            }
           />
         </Box>
 
@@ -441,15 +447,15 @@ function RecordPageInner() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              cursor: selectedSpeaker && !busy && !warmingUp ? "pointer" : "default",
+              cursor:
+                selectedSpeaker && !busy && !warmingUp ? "pointer" : "default",
               opacity: selectedSpeaker && !busy ? 1 : 0.6,
               transition: "all 0.2s ease",
-              "&:hover": selectedSpeaker && !busy && !warmingUp ? { opacity: 0.85 } : {},
+              "&:hover":
+                selectedSpeaker && !busy && !warmingUp ? { opacity: 0.85 } : {},
             }}
           >
-            {warmingUp && (
-              <CircularProgress size={32} sx={{ color: "#fff" }} />
-            )}
+            {warmingUp && <CircularProgress size={32} sx={{ color: "#fff" }} />}
             {recording && !warmingUp && (
               <StopIcon sx={{ color: "#fff", fontSize: 36 }} />
             )}
@@ -519,9 +525,10 @@ function RecordPageInner() {
         onSpeakerSelected={(speakerName) => {
           setSelectedSpeaker(speakerName);
           setSpeakers((prev) => {
-            if (prev.some((speaker) => speaker.name === speakerName)) return prev;
+            if (prev.some((speaker) => speaker.name === speakerName))
+              return prev;
             return [...prev, { name: speakerName }].sort((a, b) =>
-              a.name.localeCompare(b.name)
+              a.name.localeCompare(b.name),
             );
           });
         }}
