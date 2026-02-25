@@ -7,6 +7,8 @@ import {
   Checkbox,
   CircularProgress,
   IconButton,
+  Menu,
+  MenuItem,
   Snackbar,
   Toolbar,
   Typography,
@@ -16,6 +18,7 @@ import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 
 import StopIcon from "@mui/icons-material/Stop";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
@@ -33,6 +36,7 @@ interface RecordPageState {
   passageReference: string;
   projectName: string;
   speaker?: string | null;
+  sectionPassages?: { id: number; reference: string; speaker: string | null }[];
 }
 
 /** Hardcoded step colours for the racetrack indicator */
@@ -62,6 +66,7 @@ export default function RecordPage() {
     state.passageId || (Number.isFinite(passageIdFromQuery) ? passageIdFromQuery : 0);
   const passageReference = state.passageReference ?? "Unknown Passage";
   const projectName = state.projectName ?? "";
+  const sectionPassages = state.sectionPassages ?? [];
 
   // Audio state
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -72,6 +77,9 @@ export default function RecordPage() {
   const [compressing, setCompressing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [snackMsg, setSnackMsg] = useState<string | null>(null);
+
+  // Passage dropdown state
+  const [passageMenuAnchor, setPassageMenuAnchor] = useState<null | HTMLElement>(null);
 
   // Speaker state
   const [speakerDialogOpen, setSpeakerDialogOpen] = useState(false);
@@ -86,12 +94,13 @@ export default function RecordPage() {
       .catch(() => {/* silent — list will just be empty */});
   }, [token]);
 
-  // Load existing audio for this passage on mount
+  // Load existing audio for this passage on mount (or after passage switch)
   useEffect(() => {
     if (!token || !passageId) return;
-    fetchAudio(token, passageId).then((blob) => {
-      if (blob) setAudioBlob(blob);
-    });
+    fetchAudio(token, passageId)
+      .then((blob) => {
+        if (blob) setAudioBlob(blob);
+      })
   }, [token, passageId]);
 
   // Load saved speaker for this passage on mount
@@ -236,14 +245,9 @@ export default function RecordPage() {
             <ArrowBackIcon />
           </IconButton>
 
-          <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: "normal" }}>
-              {passageReference}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {projectName}
-            </Typography>
-          </Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, flexGrow: 1 }}>
+            {projectName}
+          </Typography>
 
           <IconButton size="small">
             <HelpOutlineIcon />
@@ -265,25 +269,83 @@ export default function RecordPage() {
         >
           <Box
             sx={{
+              display: "grid",
+              gridTemplateColumns: "1fr auto 1fr",
+              alignItems: "center",
               width: "100%",
-              px: .5,
-              overflowX: "auto",
             }}
           >
-            <Box sx={{ display: "flex", width: "fit-content", mx: "auto" }}>
-              {STEP_COLORS.map((color, i) => (
-                <Box
-                  key={i}
-                  sx={{
-                    flex: "0 0 80px",
-                    height: 30,
-                    bgcolor: color,
-                    mx: -0.25,
-                    clipPath: "polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%)",
-                  }}
-                />
-              ))}
+            {/* Passage dropdown */}
+            <Box sx={{ justifySelf: "start" }}>
+              <Button
+                size="small"
+                endIcon={<ArrowDropDownIcon />}
+                sx={{
+                  textTransform: "none",
+                  whiteSpace: "nowrap",
+                  minWidth: "auto",
+                }}
+                onClick={(e) => setPassageMenuAnchor(e.currentTarget)}
+              >
+                {passageReference}
+              </Button>
+              <Menu
+                anchorEl={passageMenuAnchor}
+                open={Boolean(passageMenuAnchor)}
+                onClose={() => setPassageMenuAnchor(null)}
+              >
+                {sectionPassages.map((p) => (
+                  <MenuItem
+                    key={p.id}
+                    selected={p.id === passageId}
+                    onClick={() => {
+                      setPassageMenuAnchor(null);
+                      if (p.id !== passageId) {
+                        setAudioBlob(null);
+                        navigate("/record", {
+                          state: {
+                            passageId: p.id,
+                            passageReference: p.reference,
+                            projectName,
+                            speaker: p.speaker,
+                            sectionPassages,
+                          },
+                        });
+                      }
+                    }}
+                  >
+                    {p.reference}
+                  </MenuItem>
+                ))}
+              </Menu>
             </Box>
+
+            {/* Parallelograms — centered in the page */}
+            <Box
+              sx={{
+                overflowX: "auto",
+                px: 0.5,
+                minWidth: 0,
+              }}
+            >
+              <Box sx={{ display: "flex", width: "fit-content", mx: "auto" }}>
+                {STEP_COLORS.map((color, i) => (
+                  <Box
+                    key={i}
+                    sx={{
+                      flex: "0 0 80px",
+                      height: 30,
+                      bgcolor: color,
+                      mx: -0.25,
+                      clipPath: "polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%)",
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+
+            {/* Empty cell to balance the grid */}
+            <Box />
           </Box>
           <Typography sx={{ mt: 1, fontWeight: 500 }}>
             Record
