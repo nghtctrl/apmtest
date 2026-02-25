@@ -275,7 +275,7 @@ export default function RecordPage() {
             }}
           >
             {/* Passage dropdown */}
-            <Box sx={{ justifySelf: "start" }}>
+            <Box sx={{ justifySelf: "start", mr: 1 }}>
               <Button
                 size="small"
                 endIcon={<ArrowDropDownIcon />}
