@@ -8,9 +8,10 @@ import React, {
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions';
 import RecordPlugin from 'wavesurfer.js/dist/plugins/record';
-import { Box, IconButton, Stack, Typography } from '@mui/material';
+import { Box, IconButton, Menu, MenuItem, Stack, Typography } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { formatTime } from './formatTime';
 
 /* ------------------------------------------------------------------ */
@@ -96,6 +97,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [playing, setPlaying] = useState(false);
+    const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
 
     // Internal selection state (managed when enableDragSelection is true)
     const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
@@ -305,6 +307,16 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
 
     /* ----- Render ----- */
     const handlePlayToggle = () => setPlaying((p) => !p);
+    const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+      setMenuAnchorEl(event.currentTarget);
+    };
+    const handleMenuClose = () => {
+      setMenuAnchorEl(null);
+    };
+    const handleReplaceAi = () => {
+      handleMenuClose();
+    };
+    const isMenuOpen = Boolean(menuAnchorEl);
 
     const timeText = formatTimeDisplay
       ? formatTimeDisplay(currentTime, duration)
@@ -314,7 +326,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
 
     return (
       <Box>
-        <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }}>
+        <Stack direction="row" alignItems="center" spacing={2}>
           <IconButton
             onClick={handlePlayToggle}
             sx={{ p: 0 }}
@@ -327,7 +339,21 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
             )}
           </IconButton>
           <Typography variant="body2">{timeText}</Typography>
+          <Box sx={{ flexGrow: 1 }} />
+          <IconButton
+            onClick={handleMenuOpen}
+          >
+            <MoreVertIcon />
+          </IconButton>
         </Stack>
+
+        <Menu
+          anchorEl={menuAnchorEl}
+          open={isMenuOpen}
+          onClose={handleMenuClose}
+        >
+          <MenuItem onClick={handleReplaceAi}>Replace AI</MenuItem>
+        </Menu>
 
         <Box
           ref={containerRef}
@@ -335,7 +361,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           sx={{
             height,
             bgcolor: 'action.hover',
-            my: 2,
+            my: 1,
             borderRadius: 1,
             overflow: 'hidden',
             width: '100%',
