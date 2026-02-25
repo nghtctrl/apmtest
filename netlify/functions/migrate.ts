@@ -49,6 +49,12 @@ export default async function handler(_req: Request, _context: Context) {
     ADD COLUMN IF NOT EXISTS audio_key VARCHAR(255)
   `;
 
+  // Add speaker column if it doesn't exist
+  await sql`
+    ALTER TABLE passages
+    ADD COLUMN IF NOT EXISTS speaker VARCHAR(255)
+  `;
+
   await sql`
     CREATE TABLE IF NOT EXISTS speakers (
       name VARCHAR(255) PRIMARY KEY

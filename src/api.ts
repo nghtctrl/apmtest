@@ -15,6 +15,7 @@ export interface Passage {
   reference: string;
   description: string;
   sort_order: number;
+  speaker: string | null;
 }
 
 export interface Section {
@@ -177,9 +178,12 @@ export async function renamePassage(
 export async function uploadAudio(
   token: string,
   passageId: number,
-  mp3Blob: Blob
+  mp3Blob: Blob,
+  speaker: string
 ): Promise<{ success: boolean; audioKey: string }> {
-  const res = await fetch(`${API_BASE}/audio?passageId=${passageId}`, {
+  const params = new URLSearchParams({ passageId: String(passageId) });
+  if (speaker) params.set("speaker", speaker);
+  const res = await fetch(`${API_BASE}/audio?${params}`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -230,6 +234,18 @@ export async function getSpeakers(
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Failed to fetch speakers");
   return data;
+}
+
+export async function getPassageSpeaker(
+  token: string,
+  passageId: number
+): Promise<string | null> {
+  const res = await fetch(`${API_BASE}/passage-speaker?passageId=${passageId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.speaker ?? null;
 }
 
 export async function createSpeaker(

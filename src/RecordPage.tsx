@@ -22,7 +22,7 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 
 import { useAuth } from "./AuthContext";
-import { uploadAudio, fetchAudio, getSpeakers, type Speaker } from "./api";
+import { uploadAudio, fetchAudio, getSpeakers, getPassageSpeaker, type Speaker } from "./api";
 import { compressToMp3 } from "./audioUtils";
 import SpeakerDialog from "./SpeakerDialog";
 import { AudioPlayer } from "./AudioPlayer";
@@ -31,6 +31,7 @@ interface RecordPageState {
   passageId: number;
   passageReference: string;
   projectName: string;
+  speaker?: string | null;
 }
 
 /** Hardcoded step colours for the racetrack indicator */
@@ -89,6 +90,19 @@ export default function RecordPage() {
     });
   }, [token, passageId]);
 
+  // Load saved speaker for this passage on mount
+  useEffect(() => {
+    if (!token || !passageId) return;
+    // Use nav-state speaker as fast initial value
+    if (state.speaker) {
+      setSelectedSpeaker(state.speaker);
+    }
+    // Always confirm from the server
+    getPassageSpeaker(token, passageId).then((name) => {
+      if (name) setSelectedSpeaker(name);
+    });
+  }, [token, passageId]);
+
   const busy = compressing || uploading;
 
   async function handleFileSelected(file: File) {
@@ -115,7 +129,7 @@ export default function RecordPage() {
 
       setCompressing(false);
       setUploading(true);
-      await uploadAudio(token, passageId, mp3Blob);
+      await uploadAudio(token, passageId, mp3Blob, selectedSpeaker!);
 
       // Set audio source for playback
       setAudioBlob(mp3Blob);

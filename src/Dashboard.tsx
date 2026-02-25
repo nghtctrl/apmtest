@@ -704,6 +704,7 @@ function PassageCard({
                 passageId: passage.id,
                 passageReference: passage.reference,
                 projectName,
+                speaker: passage.speaker,
               },
             })
           }

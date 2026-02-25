@@ -62,12 +62,21 @@ export default async function handler(req: Request, _context: Context) {
       metadata: { passageId: String(passageId), uploadedBy: String(user.userId) },
     });
 
-    // Update passage row
-    await sql`
-      UPDATE passages
-      SET audio_key = ${blobKey}
-      WHERE id = ${passageId}
-    `;
+    // Update passage row (also persist speaker if provided)
+    const speaker = url.searchParams.get("speaker");
+    if (speaker) {
+      await sql`
+        UPDATE passages
+        SET audio_key = ${blobKey}, speaker = ${speaker}
+        WHERE id = ${passageId}
+      `;
+    } else {
+      await sql`
+        UPDATE passages
+        SET audio_key = ${blobKey}
+        WHERE id = ${passageId}
+      `;
+    }
 
     return jsonRes({ success: true, audioKey: blobKey });
   }
