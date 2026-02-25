@@ -280,7 +280,6 @@ export default function RecordPage() {
                 size="small"
                 endIcon={<ArrowDropDownIcon />}
                 sx={{
-                  textTransform: "none",
                   whiteSpace: "nowrap",
                   minWidth: "auto",
                 }}

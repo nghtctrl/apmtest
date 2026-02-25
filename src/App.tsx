@@ -60,7 +60,13 @@ const theme = createTheme({
   } as any,
   typography: {
     button: {
-      textTransform: "capitalize",
+      textTransform: "none",
+    },
+    subtitle1: {
+      fontSize: "1.2rem",
+      [`@media (max-width:${BREAKPOINTS.sm}px)`]: {
+        fontSize: "1rem",
+      },
     },
   },
   components: {
