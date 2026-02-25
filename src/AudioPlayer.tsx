@@ -7,6 +7,7 @@ import React, {
 } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions';
+import RecordPlugin from 'wavesurfer.js/dist/plugins/record';
 import { Box, IconButton, Stack, Typography } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
@@ -27,6 +28,10 @@ export interface AudioPlayerHandle {
   setTime: (time: number) => void;
   /** The waveform container element (for pixel calculations) */
   container: HTMLDivElement | null;
+  /** Start recording from the microphone */
+  startRecording: () => Promise<void>;
+  /** Stop the active recording */
+  stopRecording: () => void;
 }
 
 export interface AudioPlayerProps {
@@ -53,6 +58,8 @@ export interface AudioPlayerProps {
   onTimeUpdate?: (time: number) => void;
   /** Called when WaveSurfer decodes audio (provides duration) */
   onReady?: (duration: number) => void;
+  /** Called when a recording completes (provides the recorded Blob) */
+  onRecordingComplete?: (blob: Blob) => void;
 
   /** Children rendered below the waveform (e.g. helper text) */
   children?: React.ReactNode;
@@ -75,6 +82,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       formatTimeDisplay,
       onTimeUpdate,
       onReady,
+      onRecordingComplete,
       children,
     },
     ref
@@ -82,6 +90,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const wsRef = useRef<WaveSurfer | null>(null);
     const regionsRef = useRef<RegionsPlugin | null>(null);
+    const recordRef = useRef<RecordPlugin | null>(null);
+    const recordedBlobRef = useRef<Blob | null>(null);
 
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
@@ -107,6 +117,10 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     useEffect(() => {
       onReadyRef.current = onReady;
     }, [onReady]);
+    const onRecordingCompleteRef = useRef(onRecordingComplete);
+    useEffect(() => {
+      onRecordingCompleteRef.current = onRecordingComplete;
+    }, [onRecordingComplete]);
 
     // Ref to track whether a region add is programmatic
     const programmaticRef = useRef(false);
@@ -116,6 +130,17 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       setTime: (t: number) => wsRef.current?.setTime(t),
       get container() {
         return containerRef.current;
+      },
+      startRecording: async () => {
+        const rec = recordRef.current;
+        if (!rec) return;
+        // Warm up the mic stream first so the audio pipeline is stable
+        await rec.startMic();
+        await new Promise((r) => setTimeout(r, 1250));
+        await rec.startRecording();
+      },
+      stopRecording: () => {
+        recordRef.current?.stopRecording();
       },
     }));
 
@@ -138,6 +163,17 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         plugins: [wsRegions],
       });
       wsRef.current = ws;
+
+      const record = ws.registerPlugin(RecordPlugin.create({
+        scrollingWaveform: true,
+        renderRecordedAudio: true,
+      }));
+      recordRef.current = record;
+
+      record.on('record-end', (blob: Blob) => {
+        recordedBlobRef.current = blob;
+        onRecordingCompleteRef.current?.(blob);
+      });
 
       if (enableDragSelection) {
         wsRegions.enableDragSelection({ color: 'rgba(0, 0, 0, 0.1)' });
@@ -215,6 +251,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         ws.destroy();
         wsRef.current = null;
         regionsRef.current = null;
+        recordRef.current = null;
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -223,6 +260,11 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     useEffect(() => {
       const ws = wsRef.current;
       if (!ws || !audioSource) return;
+      // Skip reload if this blob was just rendered by the RecordPlugin
+      if (audioSource instanceof Blob && audioSource === recordedBlobRef.current) {
+        recordedBlobRef.current = null;
+        return;
+      }
       if (typeof audioSource === 'string') {
         ws.load(audioSource);
       } else {

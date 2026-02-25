@@ -17,6 +17,7 @@ import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 
+import StopIcon from "@mui/icons-material/Stop";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
@@ -25,7 +26,7 @@ import { useAuth } from "./AuthContext";
 import { uploadAudio, fetchAudio, getSpeakers, getPassageSpeaker, type Speaker } from "./api";
 import { compressToMp3 } from "./audioUtils";
 import SpeakerDialog from "./SpeakerDialog";
-import { AudioPlayer } from "./AudioPlayer";
+import { AudioPlayer, type AudioPlayerHandle } from "./AudioPlayer";
 
 interface RecordPageState {
   passageId: number;
@@ -64,7 +65,10 @@ export default function RecordPage() {
 
   // Audio state
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const playerRef = useRef<AudioPlayerHandle>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [warmingUp, setWarmingUp] = useState(false);
   const [compressing, setCompressing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [snackMsg, setSnackMsg] = useState<string | null>(null);
@@ -152,6 +156,64 @@ export default function RecordPage() {
       return;
     }
     fileInputRef.current?.click();
+  }
+
+  async function handleRecordToggle() {
+    if (compressing || uploading) return;
+    if (!token) {
+      setSnackMsg("You are not logged in. Please sign in again.");
+      return;
+    }
+    if (!passageId) {
+      setSnackMsg("Missing passage ID. Return to Dashboard and open Record from a passage card.");
+      return;
+    }
+    if (!selectedSpeaker) return;
+
+    if (!recording) {
+      try {
+        setWarmingUp(true);
+        await playerRef.current?.startRecording();
+        setWarmingUp(false);
+        setRecording(true);
+      } catch {
+        setWarmingUp(false);
+        setSnackMsg("Could not access microphone. Please allow microphone access and try again.");
+      }
+    } else {
+      playerRef.current?.stopRecording();
+      setRecording(false);
+    }
+  }
+
+  async function handleRecordingComplete(blob: Blob) {
+    // Set blob for immediate playback (AudioPlayer already rendered it)
+    setAudioBlob(blob);
+    // Compress and upload
+    try {
+      setCompressing(true);
+      const file = new File([blob], "recording.webm", { type: blob.type });
+      const mp3Blob = await compressToMp3(file, 64);
+
+      const MAX_UPLOAD = 5.5 * 1024 * 1024;
+      if (mp3Blob.size > MAX_UPLOAD) {
+        const sizeMB = (mp3Blob.size / (1024 * 1024)).toFixed(1);
+        throw new Error(
+          `Compressed audio is ${sizeMB} MB — exceeds the 5.5 MB upload limit. Try a shorter recording.`
+        );
+      }
+
+      setCompressing(false);
+      setUploading(true);
+      await uploadAudio(token!, passageId, mp3Blob, selectedSpeaker!);
+      setAudioBlob(mp3Blob);
+      setSnackMsg("Audio saved!");
+    } catch (err) {
+      setSnackMsg(err instanceof Error ? err.message : "Failed to process audio");
+    } finally {
+      setCompressing(false);
+      setUploading(false);
+    }
   }
 
   return (
@@ -267,7 +329,7 @@ export default function RecordPage() {
           <Button
             startIcon={busy ? <CircularProgress size={18} /> : <FolderOpenIcon />}
             sx={{ width: "100%", maxWidth: 260 }}
-            disabled={busy || !selectedSpeaker}
+            disabled={busy || !selectedSpeaker || recording}
             onClick={handleLoadFromFileClick}
           >
             {busy ? "Uploading..." : "Load from File..."}
@@ -277,9 +339,11 @@ export default function RecordPage() {
         {/* Audio player / waveform */}
         <Box sx={{ px: 2 }}>
           <AudioPlayer
+            ref={playerRef}
             audioSource={audioBlob ?? undefined}
             height={80}
             enableDragSelection
+            onRecordingComplete={handleRecordingComplete}
           />
         </Box>
 
@@ -295,19 +359,29 @@ export default function RecordPage() {
           }}
         >
           <Box
+            onClick={handleRecordToggle}
             sx={{
               width: 80,
               height: 80,
               borderRadius: "50%",
-              border: "25px solid",
+              border: recording || warmingUp ? "none" : "25px solid",
               borderColor: selectedSpeaker ? "alert.main" : "#d0d0d0",
+              bgcolor: recording || warmingUp ? "alert.main" : "transparent",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              cursor: "default",
-              opacity: selectedSpeaker ? 1 : 0.6,
+              cursor: selectedSpeaker && !busy && !warmingUp ? "pointer" : "default",
+              opacity: selectedSpeaker && !busy ? 1 : 0.6,
+              transition: "all 0.2s ease",
+              "&:hover": selectedSpeaker && !busy && !warmingUp ? { opacity: 0.85 } : {},
             }}
           >
+            {warmingUp && (
+              <CircularProgress size={32} sx={{ color: "#fff" }} />
+            )}
+            {recording && !warmingUp && (
+              <StopIcon sx={{ color: "#fff", fontSize: 36 }} />
+            )}
           </Box>
         </Box>
 
