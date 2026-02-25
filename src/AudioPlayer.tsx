@@ -141,10 +141,6 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       const wsRegions = RegionsPlugin.create();
       regionsRef.current = wsRegions;
 
-      if (enableDragSelection) {
-        wsRegions.enableDragSelection({ color: 'rgba(0, 0, 0, 0.1)' });
-      }
-
       const ws = WaveSurfer.create({
         container: containerRef.current,
         waveColor,
@@ -157,6 +153,10 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         plugins: [wsRegions],
       });
       wsRef.current = ws;
+
+      if (enableDragSelection) {
+        wsRegions.enableDragSelection({ color: 'rgba(0, 0, 0, 0.1)' });
+      }
 
       // --- Region events (drag-selection) ---
       wsRegions.on('region-created', (region) => {

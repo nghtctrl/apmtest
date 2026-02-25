@@ -279,6 +279,7 @@ export default function RecordPage() {
           <AudioPlayer
             audioSource={audioBlob ?? undefined}
             height={80}
+            enableDragSelection
           />
         </Box>
 
