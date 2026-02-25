@@ -22,7 +22,6 @@ import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 
 import StopIcon from "@mui/icons-material/Stop";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
-import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 
 import { useAuth } from "./AuthContext";
@@ -472,15 +471,7 @@ export default function RecordPage() {
           py: 1,
         }}
       >
-        <Button
-          startIcon={<ChevronLeftIcon />}
-          sx={{ width: 95 }}
-          onClick={() => {
-            /* stub */
-          }}
-        >
-          Previous
-        </Button>
+        <Box sx={{ width: 90 }} />
 
         <Button
           startIcon={<Checkbox size="small" sx={{ p: 0 }} disabled />}
@@ -493,7 +484,6 @@ export default function RecordPage() {
 
         <Button
           endIcon={<ChevronRightIcon />}
-          sx={{ width: 90 }}
           onClick={() => {
             /* stub */
           }}
