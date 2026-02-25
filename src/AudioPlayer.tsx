@@ -35,14 +35,8 @@ export interface AudioPlayerProps {
 
   /** Point markers rendered on the waveform (reconciled on change) */
   markers?: AudioMarker[];
-  /** A highlighted selection range (controlled). null = no selection. */
-  selection?: { start: number; end: number } | null;
   /** Allow user to drag-create a selection on the waveform */
   enableDragSelection?: boolean;
-  /** Fired when the user creates or updates a selection by dragging */
-  onSelectionChange?: (sel: { start: number; end: number }) => void;
-  /** Fired when the user clicks outside any region/marker */
-  onSelectionClear?: () => void;
   /** Fired when a marker is clicked (receives the marker's time) */
   onMarkerClick?: (time: number) => void;
 
@@ -53,7 +47,7 @@ export interface AudioPlayerProps {
   /** Waveform height in px (default: 80) */
   height?: number;
 
-  /** Custom time display. If omitted, shows "currentTime / duration" */
+  /** Custom time display. If omitted, shows "currentTime / duration" (or selection range when active) */
   formatTimeDisplay?: (currentTime: number, duration: number) => string;
   /** Called on every timeupdate */
   onTimeUpdate?: (time: number) => void;
@@ -73,10 +67,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     {
       audioSource,
       markers,
-      selection,
       enableDragSelection = false,
-      onSelectionChange,
-      onSelectionClear,
       onMarkerClick,
       waveColor = '#9fc5e8',
       progressColor = '#9fc5e8',
@@ -96,18 +87,17 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const [duration, setDuration] = useState(0);
     const [playing, setPlaying] = useState(false);
 
+    // Internal selection state (managed when enableDragSelection is true)
+    const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
+    const selectionRef = useRef(selection);
+    useEffect(() => {
+      selectionRef.current = selection;
+    }, [selection]);
+
     // Stable callback refs so WaveSurfer listeners never go stale
-    const onSelectionChangeRef = useRef(onSelectionChange);
-    const onSelectionClearRef = useRef(onSelectionClear);
     const onMarkerClickRef = useRef(onMarkerClick);
     const onTimeUpdateRef = useRef(onTimeUpdate);
     const onReadyRef = useRef(onReady);
-    useEffect(() => {
-      onSelectionChangeRef.current = onSelectionChange;
-    }, [onSelectionChange]);
-    useEffect(() => {
-      onSelectionClearRef.current = onSelectionClear;
-    }, [onSelectionClear]);
     useEffect(() => {
       onMarkerClickRef.current = onMarkerClick;
     }, [onMarkerClick]);
@@ -118,13 +108,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       onReadyRef.current = onReady;
     }, [onReady]);
 
-    // Ref to track whether a region add is programmatic (from the selection prop)
+    // Ref to track whether a region add is programmatic
     const programmaticRef = useRef(false);
-    // Ref to track the current selection for use in the timeupdate handler
-    const selectionRef = useRef(selection);
-    useEffect(() => {
-      selectionRef.current = selection;
-    }, [selection]);
 
     // Imperative handle
     useImperativeHandle(ref, () => ({
@@ -161,25 +146,19 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       // --- Region events (drag-selection) ---
       wsRegions.on('region-created', (region) => {
         if (region.start === region.end) return; // marker, ignore
-        if (programmaticRef.current) return; // from selection prop
+        if (programmaticRef.current) return;
 
         // Remove other non-marker regions (single-selection mode)
         wsRegions.getRegions().forEach((r) => {
           if (r.id !== region.id && r.start !== r.end) r.remove();
         });
-        onSelectionChangeRef.current?.({
-          start: region.start,
-          end: region.end,
-        });
+        setSelection({ start: region.start, end: region.end });
         ws.setTime(region.start);
       });
 
       wsRegions.on('region-updated', (region) => {
         if (region.start === region.end) return;
-        onSelectionChangeRef.current?.({
-          start: region.start,
-          end: region.end,
-        });
+        setSelection({ start: region.start, end: region.end });
         ws.setTime(region.start);
       });
 
@@ -211,7 +190,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           wsRegions.getRegions().forEach((r) => {
             if (r.start !== r.end) r.remove();
           });
-          onSelectionClearRef.current?.();
+          setSelection(null);
         }
       });
 
@@ -275,30 +254,6 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       });
     }, [markers, duration]); // depend on duration so markers re-render after audio loads
 
-    /* ----- Sync selection prop → RegionsPlugin ----- */
-    useEffect(() => {
-      const rp = regionsRef.current;
-      if (!rp) return;
-
-      // Remove existing selection region
-      rp.getRegions().forEach((r) => {
-        if (r.id === 'controlled-selection') r.remove();
-      });
-
-      if (selection && selection.start !== selection.end) {
-        programmaticRef.current = true;
-        rp.addRegion({
-          id: 'controlled-selection',
-          start: selection.start,
-          end: selection.end,
-          color: 'rgba(0, 0, 0, 0.1)',
-          drag: true,
-          resize: true,
-        });
-        programmaticRef.current = false;
-      }
-    }, [selection]);
-
     /* ----- Sync play state ----- */
     useEffect(() => {
       const ws = wsRef.current;
@@ -311,7 +266,9 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
 
     const timeText = formatTimeDisplay
       ? formatTimeDisplay(currentTime, duration)
-      : `${formatTime(currentTime)} / ${formatTime(duration || 0)}`;
+      : selection
+        ? `${formatTime(selection.start)} - ${formatTime(selection.end)} / ${formatTime(duration || 0)}`
+        : `${formatTime(currentTime)} / ${formatTime(duration || 0)}`;
 
     return (
       <Box>
