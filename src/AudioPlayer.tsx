@@ -335,10 +335,12 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       ws.on("timeupdate", (time) => {
         setCurrentTime(time);
         onTimeUpdateRef.current?.(time);
-        // Stop playback at selection end
+        // Stop playback at selection end and seek back to start
         const sel = selectionRef.current;
-        if (sel && sel.start !== sel.end && time >= sel.end) {
+        if (ws.isPlaying() && sel && sel.start !== sel.end && time >= sel.end) {
           ws.pause();
+          ws.setTime(sel.start);
+          setCurrentTime(sel.start);
           setPlaying(false);
         }
       });
