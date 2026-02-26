@@ -72,6 +72,8 @@ export interface AudioPlayerProps {
   /** Called when a recording completes (provides the recorded Blob) */
   onRecordingComplete?: (blob: Blob) => void;
 
+  /** Show the "Replace (AI)" menu item (default: true) */
+  showReplaceAI?: boolean;
   /** Called when the user clicks "Replace AI" in the menu */
   onReplaceAI?: () => void;
 
@@ -96,6 +98,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       formatTimeDisplay,
       onTimeUpdate,
       onReady,
+      showReplaceAI = true,
       onReplaceAI,
       onRecordingComplete,
       children,
@@ -342,6 +345,19 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     };
     const isMenuOpen = Boolean(menuAnchorEl);
 
+    const menuItems: React.ReactNode[] = [];
+    if (showReplaceAI) {
+      menuItems.push(
+        <MenuItem key="replace-ai" onClick={handleReplaceAi}>
+          <ListItemIcon>
+            <GraphicEqIcon />
+          </ListItemIcon>
+          <ListItemText>Replace (AI)</ListItemText>
+        </MenuItem>,
+      );
+    }
+    const hasMenu = menuItems.length > 0;
+
     const timeText = formatTimeDisplay
       ? formatTimeDisplay(currentTime, duration)
       : selection
@@ -364,23 +380,22 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           </IconButton>
           <Typography variant="body2">{timeText}</Typography>
           <Box sx={{ flexGrow: 1 }} />
-          <IconButton onClick={handleMenuOpen}>
-            <MoreVertIcon />
-          </IconButton>
+          {hasMenu && (
+            <IconButton onClick={handleMenuOpen}>
+              <MoreVertIcon />
+            </IconButton>
+          )}
         </Stack>
 
-        <Menu
-          anchorEl={menuAnchorEl}
-          open={isMenuOpen}
-          onClose={handleMenuClose}
-        >
-          <MenuItem onClick={handleReplaceAi}>
-            <ListItemIcon>
-              <GraphicEqIcon />
-            </ListItemIcon>
-            <ListItemText>Replace (AI)</ListItemText>
-          </MenuItem>
-        </Menu>
+        {hasMenu && (
+          <Menu
+            anchorEl={menuAnchorEl}
+            open={isMenuOpen}
+            onClose={handleMenuClose}
+          >
+            {menuItems}
+          </Menu>
+        )}
 
         <Box
           ref={containerRef}

@@ -119,6 +119,7 @@ export default function ReplaceAIPage() {
           audioSource={audioBlob ?? undefined}
           height={80}
           enableDragSelection
+          showReplaceAI={false}
         />
 
         {/* Spacer */}
