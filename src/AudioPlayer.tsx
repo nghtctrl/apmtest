@@ -11,6 +11,8 @@ import RecordPlugin from "wavesurfer.js/dist/plugins/record";
 import {
   Box,
   IconButton,
+  ListItemIcon,
+  ListItemText,
   Menu,
   MenuItem,
   Stack,
@@ -19,6 +21,7 @@ import {
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import PauseIcon from "@mui/icons-material/Pause";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import GraphicEqIcon from "@mui/icons-material/GraphicEq";
 import { formatTime } from "./formatTime";
 
 /* ------------------------------------------------------------------ */
@@ -371,7 +374,12 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           open={isMenuOpen}
           onClose={handleMenuClose}
         >
-          <MenuItem onClick={handleReplaceAi}>Replace AI</MenuItem>
+          <MenuItem onClick={handleReplaceAi}>
+            <ListItemIcon>
+              <GraphicEqIcon />
+            </ListItemIcon>
+            <ListItemText>Replace (AI)</ListItemText>
+          </MenuItem>
         </Menu>
 
         <Box

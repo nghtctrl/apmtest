@@ -65,7 +65,7 @@ export default function ReplaceAIPage() {
             gap: 1,
           }}
         >
-          <GraphicEqIcon sx={{ color: "#000" }} />
+          <GraphicEqIcon />
           <Typography sx={{ fontWeight: 600 }}>Replace (AI)</Typography>
 
           <Box
