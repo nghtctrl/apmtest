@@ -77,6 +77,9 @@ export interface AudioPlayerProps {
   /** Called when the user clicks "Replace AI" in the menu */
   onReplaceAI?: () => void;
 
+  /** Called when the drag-selection changes (null when cleared) */
+  onSelectionChange?: (selection: { start: number; end: number } | null) => void;
+
   /** Children rendered below the waveform (e.g. helper text) */
   children?: React.ReactNode;
 }
@@ -100,6 +103,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       onReady,
       showReplaceAI = true,
       onReplaceAI,
+      onSelectionChange,
       onRecordingComplete,
       children,
     },
@@ -143,6 +147,10 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     useEffect(() => {
       onRecordingCompleteRef.current = onRecordingComplete;
     }, [onRecordingComplete]);
+    const onSelectionChangeRef = useRef(onSelectionChange);
+    useEffect(() => {
+      onSelectionChangeRef.current = onSelectionChange;
+    }, [onSelectionChange]);
 
     // Ref to track whether a region add is programmatic
     const programmaticRef = useRef(false);
@@ -212,13 +220,17 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         wsRegions.getRegions().forEach((r) => {
           if (r.id !== region.id && r.start !== r.end) r.remove();
         });
-        setSelection({ start: region.start, end: region.end });
+        const sel = { start: region.start, end: region.end };
+        setSelection(sel);
+        onSelectionChangeRef.current?.(sel);
         ws.setTime(region.start);
       });
 
       wsRegions.on("region-updated", (region) => {
         if (region.start === region.end) return;
-        setSelection({ start: region.start, end: region.end });
+        const sel = { start: region.start, end: region.end };
+        setSelection(sel);
+        onSelectionChangeRef.current?.(sel);
         ws.setTime(region.start);
       });
 
@@ -252,6 +264,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
             if (r.start !== r.end) r.remove();
           });
           setSelection(null);
+          onSelectionChangeRef.current?.(null);
         }
       });
 

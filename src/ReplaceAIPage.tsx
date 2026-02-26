@@ -1,14 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Box, Button, IconButton, Menu, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  IconButton,
+  Menu,
+  Stack,
+  Typography,
+} from "@mui/material";
 import GraphicEqIcon from "@mui/icons-material/GraphicEq";
 import CloudDoneOutlinedIcon from "@mui/icons-material/CloudDoneOutlined";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
-
+import AddIcon from "@mui/icons-material/Add";
 import { useAuth } from "./AuthContext";
 import { fetchAudio } from "./api";
 import { AudioPlayer, type AudioPlayerHandle } from "./AudioPlayer";
 import PageHeader from "./PageHeader";
+import { formatTime } from "./formatTime";
 
 interface ReplaceAIPageState {
   passageId: number;
@@ -30,6 +38,10 @@ export default function ReplaceAIPage() {
   const playerRef = useRef<AudioPlayerHandle>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [selection, setSelection] = useState<{
+    start: number;
+    end: number;
+  } | null>(null);
 
   // Load passage audio on mount
   useEffect(() => {
@@ -60,7 +72,7 @@ export default function ReplaceAIPage() {
             display: "flex",
             alignItems: "center",
             bgcolor: "#9fc5e8",
-            px: 2,
+            px: 1.5,
             py: 1,
             gap: 1,
           }}
@@ -120,31 +132,37 @@ export default function ReplaceAIPage() {
           height={80}
           enableDragSelection
           showReplaceAI={false}
+          onSelectionChange={setSelection}
         />
+
+        {/* Selection range display + Add Replacement button */}
+        {selection && (
+          <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2">
+              {formatTime(selection.start)} - {formatTime(selection.end)}
+            </Typography>
+            <Box sx={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
+              <Button variant="primary" sx={{ width: "100%", maxWidth: 500 }}>
+                <AddIcon />
+                Add Replacement
+              </Button>
+            </Box>
+          </Stack>
+        )}
 
         {/* Spacer */}
         <Box sx={{ flex: 1 }} />
 
         {/* Helper text */}
-        <Typography
-          variant="body1"
-          sx={{ textAlign: "center", color: "text.secondary", my: 4 }}
-        >
-          Drag to mark the parts you want to replace
-        </Typography>
+        {!selection && (
+          <Typography variant="body1" sx={{ textAlign: "center", my: 24 }}>
+            Drag to mark the parts you want to replace
+          </Typography>
+        )}
       </Box>
 
-      {/* ─── Footer ───────────────────────────────────────────── */}
       <Box sx={{ px: 2, pb: 3 }}>
-        <Button
-          fullWidth
-          disabled
-          sx={{
-            border: "1px solid rgba(0,0,0,0.23)",
-            height: 48,
-            fontSize: "1rem",
-          }}
-        >
+        <Button fullWidth disabled>
           Render Replacements
         </Button>
       </Box>
