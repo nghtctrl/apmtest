@@ -15,6 +15,7 @@ import AddIcon from "@mui/icons-material/Add";
 import { useAuth } from "./AuthContext";
 import { fetchAudio } from "./api";
 import { AudioPlayer, type AudioPlayerHandle } from "./AudioPlayer";
+import AddReplacementDialog from "./AddReplacementDialog";
 import PageHeader from "./PageHeader";
 import { formatTime } from "./formatTime";
 
@@ -42,6 +43,7 @@ export default function ReplaceAIPage() {
     start: number;
     end: number;
   } | null>(null);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   // Load passage audio on mount
   useEffect(() => {
@@ -142,7 +144,11 @@ export default function ReplaceAIPage() {
               {formatTime(selection.start)} - {formatTime(selection.end)}
             </Typography>
             <Box sx={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
-              <Button variant="primary" sx={{ width: "100%", maxWidth: 500 }}>
+              <Button
+                variant="primary"
+                sx={{ width: "100%", maxWidth: 500 }}
+                onClick={() => setAddDialogOpen(true)}
+              >
                 <AddIcon />
                 Add Replacement
               </Button>
@@ -166,6 +172,17 @@ export default function ReplaceAIPage() {
           Render Replacements
         </Button>
       </Box>
+
+      {/* ─── Add Replacement Dialog ───────────────────────── */}
+      {selection && (
+        <AddReplacementDialog
+          open={addDialogOpen}
+          audioSource={audioBlob ?? undefined}
+          selection={selection}
+          onCancel={() => setAddDialogOpen(false)}
+          onContinue={() => setAddDialogOpen(false)}
+        />
+      )}
     </Box>
   );
 }

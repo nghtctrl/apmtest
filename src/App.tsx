@@ -125,6 +125,11 @@ const theme = createTheme({
       ],
     },
     MuiIconButton: {
+      styleOverrides: {
+        root: {
+          color: "rgba(0, 0, 0, 0.7)"
+        }
+      },
       variants: [
         {
           props: { variant: "floating" },

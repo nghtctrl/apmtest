@@ -10,6 +10,7 @@ import RegionsPlugin from "wavesurfer.js/dist/plugins/regions";
 import RecordPlugin from "wavesurfer.js/dist/plugins/record";
 import {
   Box,
+  CircularProgress,
   IconButton,
   ListItemIcon,
   ListItemText,
@@ -22,7 +23,13 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import PauseIcon from "@mui/icons-material/Pause";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import GraphicEqIcon from "@mui/icons-material/GraphicEq";
+import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
+import StopIcon from "@mui/icons-material/Stop";
+import ContentCutIcon from "@mui/icons-material/ContentCut";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { formatTime } from "./formatTime";
+import { useStopwatch } from "./useStopwatch";
+import { spliceAudio } from "./audioUtils";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -47,7 +54,7 @@ export interface AudioPlayerHandle {
 
 export interface AudioPlayerProps {
   /** Audio source — either a Blob or a URL string */
-  audioSource?: Blob | string;
+  audioSource?: Blob;
 
   /** Point markers rendered on the waveform (reconciled on change) */
   markers?: AudioMarker[];
@@ -78,7 +85,22 @@ export interface AudioPlayerProps {
   onReplaceAI?: () => void;
 
   /** Called when the drag-selection changes (null when cleared) */
-  onSelectionChange?: (selection: { start: number; end: number } | null) => void;
+  onSelectionChange?: (
+    selection: { start: number; end: number } | null,
+  ) => void;
+
+  /** Show a Record button instead of Play when no audio is loaded (default: false) */
+  showRecordButton?: boolean;
+  /** Show a (disabled) cut icon in the controls row (default: false) */
+  showCut?: boolean;
+  /** Show a trash icon in the controls row (default: false) */
+  showTrash?: boolean;
+
+  /** Programmatically create a selection region on the waveform once audio is loaded */
+  initialSelection?: { start: number; end: number };
+
+  /** Called when the internal audio changes (e.g. recording completed, trash clicked) */
+  onAudioChange?: (audio: Blob | null) => void;
 
   /** Children rendered below the waveform (e.g. helper text) */
   children?: React.ReactNode;
@@ -104,7 +126,12 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       showReplaceAI = true,
       onReplaceAI,
       onSelectionChange,
+      showRecordButton = false,
+      showCut = false,
+      showTrash = false,
+      initialSelection,
       onRecordingComplete,
+      onAudioChange,
       children,
     },
     ref,
@@ -114,10 +141,16 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const regionsRef = useRef<RegionsPlugin | null>(null);
     const recordRef = useRef<RecordPlugin | null>(null);
     const recordedBlobRef = useRef<Blob | null>(null);
+    const suppressDecodeRef = useRef(false);
 
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [playing, setPlaying] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
+    const [warmingUp, setWarmingUp] = useState(false);
+    const [internalAudio, setInternalAudio] = useState<Blob | null>(
+      audioSource ?? null,
+    );
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
 
     // Internal selection state (managed when enableDragSelection is true)
@@ -135,6 +168,11 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const onTimeUpdateRef = useRef(onTimeUpdate);
     const onReadyRef = useRef(onReady);
     useEffect(() => {
+      if (audioSource) {
+        setInternalAudio(audioSource);
+      }
+    }, [audioSource]);
+    useEffect(() => {
       onMarkerClickRef.current = onMarkerClick;
     }, [onMarkerClick]);
     useEffect(() => {
@@ -151,6 +189,28 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     useEffect(() => {
       onSelectionChangeRef.current = onSelectionChange;
     }, [onSelectionChange]);
+    const onAudioChangeRef = useRef(onAudioChange);
+    useEffect(() => {
+      onAudioChangeRef.current = onAudioChange;
+    }, [onAudioChange]);
+    const isRecordingRef = useRef(false);
+    useEffect(() => {
+      isRecordingRef.current = isRecording;
+    }, [isRecording]);
+    const warmingUpRef = useRef(false);
+    useEffect(() => {
+      warmingUpRef.current = warmingUp;
+    }, [warmingUp]);
+
+    // Fire onAudioChange whenever internalAudio changes (skip the initial render)
+    const isFirstRenderRef = useRef(true);
+    useEffect(() => {
+      if (isFirstRenderRef.current) {
+        isFirstRenderRef.current = false;
+        return;
+      }
+      onAudioChangeRef.current?.(internalAudio);
+    }, [internalAudio]);
 
     // Ref to track whether a region add is programmatic
     const programmaticRef = useRef(false);
@@ -158,6 +218,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     // Imperative handle
     useImperativeHandle(ref, () => ({
       setTime: (t: number) => wsRef.current?.setTime(t),
+      play: () => setPlaying(true),
+      pause: () => setPlaying(false),
       get container() {
         return containerRef.current;
       },
@@ -204,6 +266,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
 
       record.on("record-end", (blob: Blob) => {
         recordedBlobRef.current = blob;
+        setInternalAudio(blob);
         onRecordingCompleteRef.current?.(blob);
       });
 
@@ -258,8 +321,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           );
         if (clickedMarker) {
           onMarkerClickRef.current?.(clickedMarker.start);
-        } else {
-          // Clear selection regions
+        } else if (!initialSelection) {
+          // Clear selection regions (but not when initialSelection is set)
           wsRegions.getRegions().forEach((r) => {
             if (r.start !== r.end) r.remove();
           });
@@ -280,6 +343,12 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         }
       });
       ws.on("decode", (d) => {
+        if (suppressDecodeRef.current) {
+          suppressDecodeRef.current = false;
+          return;
+        }
+        // Ignore decode events during warmup/recording (scrolling waveform buffer)
+        if (isRecordingRef.current || warmingUpRef.current) return;
         setDuration(d);
         onReadyRef.current?.(d);
       });
@@ -297,24 +366,21 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     /* ----- Sync audio source ----- */
     useEffect(() => {
       const ws = wsRef.current;
-      if (!ws || !audioSource) return;
+      if (!ws || !internalAudio) return;
+      // Restore cursor visibility (may have been hidden by trash)
+      ws.setOptions({ cursorWidth: 4 });
       // Skip reload if this blob was just rendered by the RecordPlugin
       if (
-        audioSource instanceof Blob &&
-        audioSource === recordedBlobRef.current
+        internalAudio instanceof Blob &&
+        internalAudio === recordedBlobRef.current
       ) {
         recordedBlobRef.current = null;
         return;
       }
-      if (typeof audioSource === "string") {
-        ws.load(audioSource);
-      } else {
-        const url = URL.createObjectURL(audioSource);
-        ws.load(url);
-        return () => URL.revokeObjectURL(url);
-      }
-      return undefined;
-    }, [audioSource]);
+      const url = URL.createObjectURL(internalAudio);
+      ws.load(url);
+      return () => URL.revokeObjectURL(url);
+    }, [internalAudio]);
 
     /* ----- Sync markers prop → RegionsPlugin ----- */
     useEffect(() => {
@@ -337,6 +403,32 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       });
     }, [markers, duration]); // depend on duration so markers re-render after audio loads
 
+    /* ----- Sync initial selection → RegionsPlugin ----- */
+    useEffect(() => {
+      const rp = regionsRef.current;
+      if (!rp || !initialSelection || !duration) return;
+      // Clear existing non-marker regions
+      rp.getRegions().forEach((r) => {
+        if (r.start !== r.end) r.remove();
+      });
+      programmaticRef.current = true;
+      rp.addRegion({
+        id: "initial-selection",
+        start: initialSelection.start,
+        end: initialSelection.end,
+        color: "rgba(0, 0, 0, 0.1)",
+      });
+      programmaticRef.current = false;
+      setSelection({
+        start: initialSelection.start,
+        end: initialSelection.end,
+      });
+      wsRef.current?.setTime(initialSelection.start);
+    }, [initialSelection, duration]);
+
+    // Drive `duration` from a stopwatch while recording
+    useStopwatch(isRecording, (t) => setDuration(t));
+
     /* ----- Sync play state ----- */
     useEffect(() => {
       const ws = wsRef.current;
@@ -345,7 +437,64 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     }, [playing]);
 
     /* ----- Render ----- */
+    const hasLoadedAudio = duration > 0;
+
     const handlePlayToggle = () => setPlaying((p) => !p);
+
+    const handleStartRec = async () => {
+      const rec = recordRef.current;
+      if (!rec) return;
+      try {
+        setWarmingUp(true);
+        await rec.startMic();
+        await new Promise((r) => setTimeout(r, 1250));
+        setWarmingUp(false);
+        setIsRecording(true);
+        await rec.startRecording();
+      } catch {
+        setWarmingUp(false);
+        setIsRecording(false);
+      }
+    };
+    const handleStopRec = () => {
+      recordRef.current?.stopRecording();
+      setIsRecording(false);
+    };
+    const handleCutClick = async () => {
+      if (!internalAudio || !selection) return;
+      const cutStart = selection.start;
+      try {
+        const spliced = await spliceAudio(
+          internalAudio,
+          selection.start,
+          selection.end,
+        );
+        // Clear selection and regions before loading new audio
+        setSelection(null);
+        onSelectionChangeRef.current?.(null);
+        regionsRef.current?.getRegions().forEach((r) => {
+          if (r.start !== r.end) r.remove();
+        });
+        setInternalAudio(spliced);
+        wsRef.current?.setTime(cutStart);
+      } catch {
+        // Splice failed — leave audio unchanged
+      }
+    };
+    const handleTrashClick = () => {
+      setInternalAudio(null);
+      const ws = wsRef.current;
+      if (ws) {
+        suppressDecodeRef.current = true;
+        ws.empty();
+        ws.setOptions({ cursorWidth: 0 });
+      }
+      setDuration(0);
+      setCurrentTime(0);
+      setPlaying(false);
+      setSelection(null);
+    };
+
     const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
       setMenuAnchorEl(event.currentTarget);
     };
@@ -380,19 +529,71 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     return (
       <Box>
         <Stack direction="row" alignItems="center" spacing={2}>
-          <IconButton
-            onClick={handlePlayToggle}
-            sx={{ p: 0 }}
-            aria-label={playing ? "pause" : "play"}
-          >
-            {playing ? (
-              <PauseIcon fontSize="large" sx={{ color: "neutral.main" }} />
+          {/* Left button: Record/Stop when showRecordButton and no audio (or warming up / actively recording), otherwise Play/Pause */}
+          {showRecordButton &&
+          (!hasLoadedAudio || isRecording || warmingUp) ? (
+            warmingUp ? (
+              <IconButton disabled sx={{ p: 0 }} aria-label="warming up">
+                <CircularProgress size={24} />
+              </IconButton>
+            ) : isRecording ? (
+              <IconButton
+                onClick={handleStopRec}
+                sx={{ p: 0 }}
+                aria-label="stop recording"
+              >
+                <StopIcon fontSize="large" sx={{ color: "error.main" }} />
+              </IconButton>
             ) : (
-              <PlayArrowIcon fontSize="large" sx={{ color: "neutral.main" }} />
-            )}
-          </IconButton>
+              <IconButton
+                onClick={handleStartRec}
+                sx={{ p: 0 }}
+                aria-label="start recording"
+              >
+                <FiberManualRecordIcon
+                  fontSize="large"
+                  sx={{ color: "error.main" }}
+                />
+              </IconButton>
+            )
+          ) : (
+            <IconButton
+              onClick={handlePlayToggle}
+              disabled={!hasLoadedAudio}
+              sx={{ p: 0 }}
+              aria-label={playing ? "pause" : "play"}
+            >
+              {playing ? (
+                <PauseIcon fontSize="large" sx={{ color: "neutral.main" }} />
+              ) : (
+                <PlayArrowIcon
+                  fontSize="large"
+                />
+              )}
+            </IconButton>
+          )}
           <Typography variant="body2">{timeText}</Typography>
           <Box sx={{ flexGrow: 1 }} />
+          {showCut && (
+            <IconButton
+              disabled={!selection}
+              size="small"
+              aria-label="cut"
+              onClick={handleCutClick}
+            >
+              <ContentCutIcon fontSize="small" />
+            </IconButton>
+          )}
+          {showTrash && (
+            <IconButton
+              disabled={!hasLoadedAudio || isRecording || warmingUp}
+              size="small"
+              aria-label="delete recording"
+              onClick={handleTrashClick}
+            >
+              <DeleteOutlineIcon fontSize="small" />
+            </IconButton>
+          )}
           {hasMenu && (
             <IconButton onClick={handleMenuOpen}>
               <MoreVertIcon />
