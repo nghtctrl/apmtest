@@ -642,6 +642,18 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
             overflowX: "auto",
             overflowY: "hidden",
             width: "100%",
+            touchAction: "none",
+            "&::-webkit-scrollbar": {
+              height: 12,
+              WebkitAppearance: "none",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              borderRadius: 4,
+              bgcolor: "rgba(0,0,0,0.3)",
+            },
+            "&::-webkit-scrollbar-track": {
+              bgcolor: "rgba(0,0,0,0.1)",
+            },
           }}
         />
         {children}
