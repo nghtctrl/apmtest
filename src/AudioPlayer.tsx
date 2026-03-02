@@ -8,6 +8,7 @@ import React, {
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions";
 import RecordPlugin from "wavesurfer.js/dist/plugins/record";
+import ZoomPlugin from "wavesurfer.js/dist/plugins/zoom";
 import {
   Box,
   CircularProgress,
@@ -102,6 +103,9 @@ export interface AudioPlayerProps {
   /** Called when the internal audio changes (e.g. recording completed, trash clicked) */
   onAudioChange?: (audio: Blob | null) => void;
 
+  /** Enable mouse-wheel and touch-pinch zoom on the waveform (default: true) */
+  enableZoom?: boolean;
+
   /** Children rendered below the waveform (e.g. helper text) */
   children?: React.ReactNode;
 }
@@ -132,6 +136,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       initialSelection,
       onRecordingComplete,
       onAudioChange,
+      enableZoom = true,
       children,
     },
     ref,
@@ -243,6 +248,19 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       const wsRegions = RegionsPlugin.create();
       regionsRef.current = wsRegions;
 
+      const plugins: Array<RegionsPlugin | ZoomPlugin> = [wsRegions];
+      if (enableZoom) {
+        plugins.push(
+          ZoomPlugin.create({
+            scale: 0.5,
+            maxZoom: 300,
+            deltaThreshold: 5,
+            exponentialZooming: true,
+            iterations: 20,
+          }),
+        );
+      }
+
       const ws = WaveSurfer.create({
         container: containerRef.current,
         waveColor,
@@ -252,7 +270,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         barWidth: 2,
         height,
         normalize: true,
-        plugins: [wsRegions],
+        plugins,
       });
       wsRef.current = ws;
 
@@ -617,11 +635,12 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           ref={containerRef}
           aria-label="Waveform"
           sx={{
-            height,
+            minHeight: height,
             bgcolor: "action.hover",
             my: 1,
             borderRadius: 1,
-            overflow: "hidden",
+            overflowX: "auto",
+            overflowY: "hidden",
             width: "100%",
           }}
         />
