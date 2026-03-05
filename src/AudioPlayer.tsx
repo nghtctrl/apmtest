@@ -147,6 +147,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const recordRef = useRef<RecordPlugin | null>(null);
     const recordedBlobRef = useRef<Blob | null>(null);
     const suppressDecodeRef = useRef(false);
+    const dragCleanupRef = useRef<(() => void) | null>(null);
 
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
@@ -288,8 +289,32 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         onRecordingCompleteRef.current?.(blob);
       });
 
+      const container = containerRef.current!;
       if (enableDragSelection) {
-        wsRegions.enableDragSelection({ color: "rgba(0, 0, 0, 0.1)" });
+        dragCleanupRef.current = wsRegions.enableDragSelection({
+          color: "rgba(0, 0, 0, 0.1)",
+        });
+
+        // Work around a bug in wavesurfer's createDragStream: multi-touch leaves
+        // stale entries in its activePointers map, permanently breaking drag selection.
+        // Re-initialize drag selection after each pinch gesture to reset the state.
+        let wasPinching = false;
+        const onTouchStart = (e: TouchEvent) => {
+          if (e.touches.length >= 2) wasPinching = true;
+        };
+        const onTouchEnd = (e: TouchEvent) => {
+          if (wasPinching && e.touches.length === 0) {
+            wasPinching = false;
+            dragCleanupRef.current?.();
+            dragCleanupRef.current = wsRegions.enableDragSelection({
+              color: "rgba(0, 0, 0, 0.1)",
+            });
+          }
+        };
+        container.addEventListener("touchstart", onTouchStart, {
+          passive: true,
+        });
+        container.addEventListener("touchend", onTouchEnd, { passive: true });
       }
 
       // --- Region events (drag-selection) ---
@@ -375,6 +400,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       ws.on("finish", () => setPlaying(false));
 
       return () => {
+        dragCleanupRef.current?.();
         ws.destroy();
         wsRef.current = null;
         regionsRef.current = null;
@@ -550,8 +576,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       <Box>
         <Stack direction="row" alignItems="center" spacing={2}>
           {/* Left button: Record/Stop when showRecordButton and no audio (or warming up / actively recording), otherwise Play/Pause */}
-          {showRecordButton &&
-          (!hasLoadedAudio || isRecording || warmingUp) ? (
+          {showRecordButton && (!hasLoadedAudio || isRecording || warmingUp) ? (
             warmingUp ? (
               <IconButton disabled sx={{ p: 0 }} aria-label="warming up">
                 <CircularProgress size={24} />
@@ -586,9 +611,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
               {playing ? (
                 <PauseIcon fontSize="large" sx={{ color: "neutral.main" }} />
               ) : (
-                <PlayArrowIcon
-                  fontSize="large"
-                />
+                <PlayArrowIcon fontSize="large" />
               )}
             </IconButton>
           )}
@@ -639,21 +662,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
             bgcolor: "action.hover",
             my: 1,
             borderRadius: 1,
-            overflowX: "auto",
-            overflowY: "hidden",
+            overflow: "hidden",
             width: "100%",
-            touchAction: "none",
-            "&::-webkit-scrollbar": {
-              height: 12,
-              WebkitAppearance: "none",
-            },
-            "&::-webkit-scrollbar-thumb": {
-              borderRadius: 4,
-              bgcolor: "rgba(0,0,0,0.3)",
-            },
-            "&::-webkit-scrollbar-track": {
-              bgcolor: "rgba(0,0,0,0.1)",
-            },
           }}
         />
         {children}
