@@ -403,7 +403,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         onTimeUpdateRef.current?.(time);
         // Stop playback at selection end and seek back to start
         const sel = selectionRef.current;
-        if (ws.isPlaying() && sel && sel.start !== sel.end && time >= sel.end) {
+        if (enableDragSelection && ws.isPlaying() && sel && sel.start !== sel.end && time >= sel.end) {
           ws.pause();
           ws.setTime(sel.start);
           setCurrentTime(sel.start);
