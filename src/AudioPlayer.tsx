@@ -601,7 +601,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const timeText = formatTimeDisplay
       ? formatTimeDisplay(currentTime, duration)
       : selection
-        ? `${formatTime(selection.start)} - ${formatTime(selection.end)} / ${formatTime(duration || 0)}`
+        ? `${formatTime(selection.start)} - ${formatTime(selection.end)}`
         : `${formatTime(currentTime)} / ${formatTime(duration || 0)}`;
 
     return (
