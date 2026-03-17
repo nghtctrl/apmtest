@@ -30,8 +30,8 @@ export default function AddReplacementDialog({
   onCancel,
   onContinue,
 }: AddReplacementDialogProps) {
-  const previewPlayerRef = useRef<AudioPlayerHandle>(null);
-  const recorderPlayerRef = useRef<AudioPlayerHandle>(null);
+  const passagePlayerRef = useRef<AudioPlayerHandle>(null);
+  const replacementPlayerRef = useRef<AudioPlayerHandle>(null);
 
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
@@ -61,7 +61,7 @@ export default function AddReplacementDialog({
 
     setReplacing(true);
     try {
-      previewPlayerRef.current?.pushUndo();
+      passagePlayerRef.current?.pushUndo();
       const { blob, replacementDuration } = await replaceAudioSegment(
         previewAudio,
         previewSelection.start,
@@ -90,11 +90,14 @@ export default function AddReplacementDialog({
       <DialogContent>
         {/* ─── Preview player (shows the selected region) ───── */}
         <AudioPlayer
-          ref={previewPlayerRef}
+          ref={passagePlayerRef}
           audioSource={previewAudio}
           height={60}
           showReplaceAI={false}
-          initialSelection={previewSelection}
+          stickySelection={previewSelection}
+          selectionWaveColor={
+            previewAudio !== audioSource ? "#ff660091" : undefined
+          }
           onAudioChange={(audio) => setPreviewAudio(audio ?? undefined)}
           onSelectionChange={(sel) => {
             if (sel) setPreviewSelection(sel);
@@ -134,7 +137,7 @@ export default function AddReplacementDialog({
 
         {/* ─── Recorder player ──────────────────────────────── */}
         <AudioPlayer
-          ref={recorderPlayerRef}
+          ref={replacementPlayerRef}
           height={60}
           showReplaceAI={false}
           enableDragSelection

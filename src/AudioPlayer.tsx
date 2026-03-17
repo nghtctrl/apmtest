@@ -32,6 +32,10 @@ import UndoIcon from "@mui/icons-material/Undo";
 import { formatTime } from "./formatTime";
 import { useStopwatch } from "./useStopwatch";
 import { spliceAudio } from "./audioUtils";
+import {
+  createWaveformRenderer,
+  disableProgressSplit,
+} from "./waveformRenderer";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -103,13 +107,16 @@ export interface AudioPlayerProps {
   showUndo?: boolean;
 
   /** Programmatically create a selection region on the waveform once audio is loaded */
-  initialSelection?: { start: number; end: number };
+  stickySelection?: { start: number; end: number };
 
   /** Called when the internal audio changes (e.g. recording completed, trash clicked) */
   onAudioChange?: (audio: Blob | null) => void;
 
   /** Enable mouse-wheel and touch-pinch zoom on the waveform (default: true) */
   enableZoom?: boolean;
+
+  /** When set, waveform bars inside the selection use this color instead of waveColor */
+  selectionWaveColor?: string;
 
   /** Children rendered below the waveform (e.g. helper text) */
   children?: React.ReactNode;
@@ -139,9 +146,10 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       showCut = false,
       showTrash = false,
       showUndo = true,
-      initialSelection,
+      stickySelection,
       onRecordingComplete,
       onAudioChange,
+      selectionWaveColor = "#9fc5e8",
       enableZoom = true,
       children,
     },
@@ -183,6 +191,18 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     useEffect(() => {
       selectionRef.current = selection;
     }, [selection]);
+    const selectionWaveColorRef = useRef(selectionWaveColor);
+    useEffect(() => {
+      selectionWaveColorRef.current = selectionWaveColor;
+    }, [selectionWaveColor]);
+    const waveColorRef = useRef(waveColor);
+    useEffect(() => {
+      waveColorRef.current = waveColor;
+    }, [waveColor]);
+    const durationRef = useRef(duration);
+    useEffect(() => {
+      durationRef.current = duration;
+    }, [duration]);
 
     // Stable callback refs so WaveSurfer listeners never go stale
     const onMarkerClickRef = useRef(onMarkerClick);
@@ -285,7 +305,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         );
       }
 
-      const ws = WaveSurfer.create({
+      const wsOptions = {
         container: containerRef.current,
         waveColor,
         progressColor,
@@ -295,8 +315,23 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         height,
         normalize: true,
         plugins,
-      });
+      };
+
+      const renderFunction = createWaveformRenderer(
+        {
+          selection: selectionRef,
+          duration: durationRef,
+          selectionWaveColor: selectionWaveColorRef,
+          waveColor: waveColorRef,
+          ws: wsRef,
+        },
+        wsOptions,
+      );
+
+      const ws = WaveSurfer.create({ ...wsOptions, renderFunction });
       wsRef.current = ws;
+
+      disableProgressSplit(ws);
 
       const record = ws.registerPlugin(
         RecordPlugin.create({
@@ -314,9 +349,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
 
       const container = containerRef.current!;
       if (enableDragSelection) {
-        dragCleanupRef.current = wsRegions.enableDragSelection({
-          color: "rgba(0, 0, 0, 0.1)",
-        });
+        dragCleanupRef.current = wsRegions.enableDragSelection({});
 
         // Work around a bug in wavesurfer's createDragStream: multi-touch leaves
         // stale entries in its activePointers map, permanently breaking drag selection.
@@ -329,9 +362,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           if (wasPinching && e.touches.length === 0) {
             wasPinching = false;
             dragCleanupRef.current?.();
-            dragCleanupRef.current = wsRegions.enableDragSelection({
-              color: "rgba(0, 0, 0, 0.1)",
-            });
+            dragCleanupRef.current = wsRegions.enableDragSelection({});
           }
         };
         container.addEventListener("touchstart", onTouchStart, {
@@ -387,7 +418,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           );
         if (clickedMarker) {
           onMarkerClickRef.current?.(clickedMarker.start);
-        } else if (!initialSelection) {
+        } else if (!stickySelection) {
           // Clear selection regions (but not when initialSelection is set)
           wsRegions.getRegions().forEach((r) => {
             if (r.start !== r.end) r.remove();
@@ -403,7 +434,13 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         onTimeUpdateRef.current?.(time);
         // Stop playback at selection end and seek back to start
         const sel = selectionRef.current;
-        if (enableDragSelection && ws.isPlaying() && sel && sel.start !== sel.end && time >= sel.end) {
+        if (
+          enableDragSelection &&
+          ws.isPlaying() &&
+          sel &&
+          sel.start !== sel.end &&
+          time >= sel.end
+        ) {
           ws.pause();
           ws.setTime(sel.start);
           setCurrentTime(sel.start);
@@ -430,7 +467,6 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
             wsRegions.addRegion({
               start: sel.start,
               end: sel.end,
-              color: "rgba(0, 0, 0, 0.1)",
             });
             programmaticRef.current = false;
           }
@@ -483,7 +519,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     /* ----- Sync initial selection → RegionsPlugin ----- */
     useEffect(() => {
       const rp = regionsRef.current;
-      if (!rp || !initialSelection || !duration) return;
+      if (!rp || !stickySelection || !duration) return;
       // Clear existing non-marker regions
       rp.getRegions().forEach((r) => {
         if (r.start !== r.end) r.remove();
@@ -491,17 +527,23 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       programmaticRef.current = true;
       rp.addRegion({
         id: "initial-selection",
-        start: initialSelection.start,
-        end: initialSelection.end,
-        color: "rgba(0, 0, 0, 0.1)",
+        start: stickySelection.start,
+        end: stickySelection.end,
       });
       programmaticRef.current = false;
       setSelection({
-        start: initialSelection.start,
-        end: initialSelection.end,
+        start: stickySelection.start,
+        end: stickySelection.end,
       });
-      wsRef.current?.setTime(initialSelection.start);
-    }, [initialSelection, duration]);
+      wsRef.current?.setTime(stickySelection.start);
+    }, [stickySelection, duration]);
+
+    /* ----- Re-render waveform when selection bar color changes ----- */
+    useEffect(() => {
+      const ws = wsRef.current;
+      if (!ws || !duration) return;
+      ws.setOptions({});
+    }, [selectionWaveColor, selection, duration, waveColor]);
 
     // Drive `duration` from a stopwatch while recording
     useStopwatch(isRecording, (t) => setDuration(t));
