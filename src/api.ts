@@ -215,6 +215,7 @@ export async function fetchAudio(
 ): Promise<Blob | null> {
   const res = await fetch(`${API_BASE}/audio?passageId=${passageId}`, {
     headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
   });
   if (res.status === 404) return null;
   if (!res.ok) return null;

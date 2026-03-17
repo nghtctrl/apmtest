@@ -145,7 +145,6 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const wsRef = useRef<WaveSurfer | null>(null);
     const regionsRef = useRef<RegionsPlugin | null>(null);
     const recordRef = useRef<RecordPlugin | null>(null);
-    const recordedBlobRef = useRef<Blob | null>(null);
     const suppressDecodeRef = useRef(false);
     const dragCleanupRef = useRef<(() => void) | null>(null);
 
@@ -221,6 +220,22 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     // Ref to track whether a region add is programmatic
     const programmaticRef = useRef(false);
 
+    // Shared recording helpers (used by both imperative handle and internal UI)
+    const startRecording = async () => {
+      const rec = recordRef.current;
+      if (!rec) return;
+      setWarmingUp(true);
+      await rec.startMic();
+      await new Promise((r) => setTimeout(r, 1250));
+      setWarmingUp(false);
+      setIsRecording(true);
+      await rec.startRecording();
+    };
+    const stopRecording = () => {
+      recordRef.current?.stopRecording();
+      setIsRecording(false);
+    };
+
     // Imperative handle
     useImperativeHandle(ref, () => ({
       setTime: (t: number) => wsRef.current?.setTime(t),
@@ -229,17 +244,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       get container() {
         return containerRef.current;
       },
-      startRecording: async () => {
-        const rec = recordRef.current;
-        if (!rec) return;
-        // Warm up the mic stream first so the audio pipeline is stable
-        await rec.startMic();
-        await new Promise((r) => setTimeout(r, 1250));
-        await rec.startRecording();
-      },
-      stopRecording: () => {
-        recordRef.current?.stopRecording();
-      },
+      startRecording,
+      stopRecording,
     }));
 
     /* ----- Init WaveSurfer ----- */
@@ -284,7 +290,6 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       recordRef.current = record;
 
       record.on("record-end", (blob: Blob) => {
-        recordedBlobRef.current = blob;
         setInternalAudio(blob);
         onRecordingCompleteRef.current?.(blob);
       });
@@ -415,14 +420,6 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       if (!ws || !internalAudio) return;
       // Restore cursor visibility (may have been hidden by trash)
       ws.setOptions({ cursorWidth: 4 });
-      // Skip reload if this blob was just rendered by the RecordPlugin
-      if (
-        internalAudio instanceof Blob &&
-        internalAudio === recordedBlobRef.current
-      ) {
-        recordedBlobRef.current = null;
-        return;
-      }
       const url = URL.createObjectURL(internalAudio);
       ws.load(url);
       return () => URL.revokeObjectURL(url);
@@ -488,24 +485,14 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const handlePlayToggle = () => setPlaying((p) => !p);
 
     const handleStartRec = async () => {
-      const rec = recordRef.current;
-      if (!rec) return;
       try {
-        setWarmingUp(true);
-        await rec.startMic();
-        await new Promise((r) => setTimeout(r, 1250));
-        setWarmingUp(false);
-        setIsRecording(true);
-        await rec.startRecording();
+        await startRecording();
       } catch {
         setWarmingUp(false);
         setIsRecording(false);
       }
     };
-    const handleStopRec = () => {
-      recordRef.current?.stopRecording();
-      setIsRecording(false);
-    };
+    const handleStopRec = () => stopRecording();
     const handleCutClick = async () => {
       if (!internalAudio || !selection) return;
       const cutStart = selection.start;

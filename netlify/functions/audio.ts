@@ -97,7 +97,7 @@ export default async function handler(req: Request, _context: Context) {
       status: 200,
       headers: {
         "Content-Type": "audio/mpeg",
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": "private, no-cache",
       },
     });
   }
