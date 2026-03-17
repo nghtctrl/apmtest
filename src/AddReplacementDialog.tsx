@@ -37,11 +37,10 @@ export default function AddReplacementDialog({
   const [note, setNote] = useState("");
   const [name, setName] = useState("");
   const [replacementAudio, setReplacementAudio] = useState<Blob | null>(null);
-  const [modifiedAudio, setModifiedAudio] = useState<Blob | null>(null);
-  const [modifiedSelection, setModifiedSelection] = useState<{
-    start: number;
-    end: number;
-  } | null>(null);
+  const [previewAudio, setPreviewAudio] = useState<Blob | undefined>(
+    audioSource,
+  );
+  const [previewSelection, setPreviewSelection] = useState(selection);
   const [replacing, setReplacing] = useState(false);
 
   // Reset form state when dialog opens
@@ -51,30 +50,28 @@ export default function AddReplacementDialog({
       setNote("");
       setName("");
       setReplacementAudio(null);
-      setModifiedAudio(null);
-      setModifiedSelection(null);
+      setPreviewAudio(audioSource);
+      setPreviewSelection(selection);
       setReplacing(false);
     }
   }, [open]);
 
   const handleSetAsReplacement = async () => {
-    if (!replacementAudio) return;
-    const currentAudio = modifiedAudio ?? audioSource;
-    const currentSelection = modifiedSelection ?? selection;
-    if (!currentAudio) return;
+    if (!replacementAudio || !previewAudio) return;
 
     setReplacing(true);
     try {
+      previewPlayerRef.current?.pushUndo();
       const { blob, replacementDuration } = await replaceAudioSegment(
-        currentAudio,
-        currentSelection.start,
-        currentSelection.end,
+        previewAudio,
+        previewSelection.start,
+        previewSelection.end,
         replacementAudio,
       );
-      setModifiedAudio(blob);
-      setModifiedSelection({
-        start: currentSelection.start,
-        end: currentSelection.start + replacementDuration,
+      setPreviewAudio(blob);
+      setPreviewSelection({
+        start: previewSelection.start,
+        end: previewSelection.start + replacementDuration,
       });
     } catch {
       // Replacement failed — leave audio unchanged
@@ -94,10 +91,14 @@ export default function AddReplacementDialog({
         {/* ─── Preview player (shows the selected region) ───── */}
         <AudioPlayer
           ref={previewPlayerRef}
-          audioSource={modifiedAudio ?? audioSource}
+          audioSource={previewAudio}
           height={60}
           showReplaceAI={false}
-          initialSelection={modifiedSelection ?? selection}
+          initialSelection={previewSelection}
+          onAudioChange={(audio) => setPreviewAudio(audio ?? undefined)}
+          onSelectionChange={(sel) => {
+            if (sel) setPreviewSelection(sel);
+          }}
         />
 
         {/* ─── Previous Replacement Recordings (disabled) ───── */}

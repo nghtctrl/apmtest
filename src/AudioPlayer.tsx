@@ -28,6 +28,7 @@ import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
 import StopIcon from "@mui/icons-material/Stop";
 import ContentCutIcon from "@mui/icons-material/ContentCut";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import UndoIcon from "@mui/icons-material/Undo";
 import { formatTime } from "./formatTime";
 import { useStopwatch } from "./useStopwatch";
 import { spliceAudio } from "./audioUtils";
@@ -51,6 +52,8 @@ export interface AudioPlayerHandle {
   startRecording: () => Promise<void>;
   /** Stop the active recording */
   stopRecording: () => void;
+  /** Push current audio + selection onto the undo stack */
+  pushUndo: () => void;
 }
 
 export interface AudioPlayerProps {
@@ -96,6 +99,8 @@ export interface AudioPlayerProps {
   showCut?: boolean;
   /** Show a trash icon in the controls row (default: false) */
   showTrash?: boolean;
+  /** Show an undo icon in the controls row (default: true) */
+  showUndo?: boolean;
 
   /** Programmatically create a selection region on the waveform once audio is loaded */
   initialSelection?: { start: number; end: number };
@@ -133,6 +138,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       showRecordButton = false,
       showCut = false,
       showTrash = false,
+      showUndo = true,
       initialSelection,
       onRecordingComplete,
       onAudioChange,
@@ -157,6 +163,16 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       audioSource ?? null,
     );
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+
+    // Undo stack
+    interface UndoEntry {
+      audio: Blob | null;
+      selection: { start: number; end: number } | null;
+    }
+    const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+    const pushUndo = () => {
+      setUndoStack((prev) => [...prev, { audio: internalAudio, selection }]);
+    };
 
     // Internal selection state (managed when enableDragSelection is true)
     const [selection, setSelection] = useState<{
@@ -246,6 +262,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       },
       startRecording,
       stopRecording,
+      pushUndo,
     }));
 
     /* ----- Init WaveSurfer ----- */
@@ -291,6 +308,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
 
       record.on("record-end", (blob: Blob) => {
         setInternalAudio(blob);
+        setUndoStack([]);
         onRecordingCompleteRef.current?.(blob);
       });
 
@@ -401,6 +419,22 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         if (isRecordingRef.current || warmingUpRef.current) return;
         setDuration(d);
         onReadyRef.current?.(d);
+        // Restore selection region if present but not visible (e.g. after undo)
+        const sel = selectionRef.current;
+        if (sel && wsRegions) {
+          const hasRegion = wsRegions
+            .getRegions()
+            .some((r) => r.start !== r.end);
+          if (!hasRegion) {
+            programmaticRef.current = true;
+            wsRegions.addRegion({
+              start: sel.start,
+              end: sel.end,
+              color: "rgba(0, 0, 0, 0.1)",
+            });
+            programmaticRef.current = false;
+          }
+        }
       });
       ws.on("finish", () => setPlaying(false));
 
@@ -493,8 +527,18 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       }
     };
     const handleStopRec = () => stopRecording();
+    const handleUndo = () => {
+      const stack = [...undoStack];
+      const entry = stack.pop();
+      if (!entry) return;
+      setUndoStack(stack);
+      setInternalAudio(entry.audio);
+      setSelection(entry.selection);
+      onSelectionChangeRef.current?.(entry.selection);
+    };
     const handleCutClick = async () => {
       if (!internalAudio || !selection) return;
+      pushUndo();
       const cutStart = selection.start;
       try {
         const spliced = await spliceAudio(
@@ -515,6 +559,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       }
     };
     const handleTrashClick = () => {
+      pushUndo();
       setInternalAudio(null);
       const ws = wsRef.current;
       if (ws) {
@@ -602,13 +647,27 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
               )}
             </IconButton>
           )}
-          <Typography variant="body2">{timeText}</Typography>
+          <Typography variant="body2" sx={{ ml: "12px !important" }}>
+            {timeText}
+          </Typography>
           <Box sx={{ flexGrow: 1 }} />
+          {showUndo && undoStack.length > 0 && (
+            <IconButton
+              disabled={undoStack.length === 0}
+              size="small"
+              aria-label="undo"
+              sx={{ ml: "12px !important" }}
+              onClick={handleUndo}
+            >
+              <UndoIcon fontSize="small" />
+            </IconButton>
+          )}
           {showCut && (
             <IconButton
               disabled={!selection}
               size="small"
               aria-label="cut"
+              sx={{ ml: "12px !important" }}
               onClick={handleCutClick}
             >
               <ContentCutIcon fontSize="small" />
@@ -619,6 +678,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
               disabled={!hasLoadedAudio || isRecording || warmingUp}
               size="small"
               aria-label="delete recording"
+              sx={{ ml: "12px !important" }}
               onClick={handleTrashClick}
             >
               <DeleteOutlineIcon fontSize="small" />
