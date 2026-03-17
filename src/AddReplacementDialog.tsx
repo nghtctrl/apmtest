@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 
 import { AudioPlayer, type AudioPlayerHandle } from "./AudioPlayer";
+import { replaceAudioSegment } from "./audioUtils";
 
 interface AddReplacementDialogProps {
   open: boolean;
@@ -36,6 +37,12 @@ export default function AddReplacementDialog({
   const [note, setNote] = useState("");
   const [name, setName] = useState("");
   const [replacementAudio, setReplacementAudio] = useState<Blob | null>(null);
+  const [modifiedAudio, setModifiedAudio] = useState<Blob | null>(null);
+  const [modifiedSelection, setModifiedSelection] = useState<{
+    start: number;
+    end: number;
+  } | null>(null);
+  const [replacing, setReplacing] = useState(false);
 
   // Reset form state when dialog opens
   useEffect(() => {
@@ -44,8 +51,37 @@ export default function AddReplacementDialog({
       setNote("");
       setName("");
       setReplacementAudio(null);
+      setModifiedAudio(null);
+      setModifiedSelection(null);
+      setReplacing(false);
     }
   }, [open]);
+
+  const handleSetAsReplacement = async () => {
+    if (!replacementAudio) return;
+    const currentAudio = modifiedAudio ?? audioSource;
+    const currentSelection = modifiedSelection ?? selection;
+    if (!currentAudio) return;
+
+    setReplacing(true);
+    try {
+      const { blob, replacementDuration } = await replaceAudioSegment(
+        currentAudio,
+        currentSelection.start,
+        currentSelection.end,
+        replacementAudio,
+      );
+      setModifiedAudio(blob);
+      setModifiedSelection({
+        start: currentSelection.start,
+        end: currentSelection.start + replacementDuration,
+      });
+    } catch {
+      // Replacement failed — leave audio unchanged
+    } finally {
+      setReplacing(false);
+    }
+  };
 
   const handleContinue = () => {
     onContinue({ title: title.trim(), note: note.trim() });
@@ -58,10 +94,10 @@ export default function AddReplacementDialog({
         {/* ─── Preview player (shows the selected region) ───── */}
         <AudioPlayer
           ref={previewPlayerRef}
-          audioSource={audioSource}
+          audioSource={modifiedAudio ?? audioSource}
           height={60}
           showReplaceAI={false}
-          initialSelection={selection}
+          initialSelection={modifiedSelection ?? selection}
         />
 
         {/* ─── Previous Replacement Recordings (disabled) ───── */}
@@ -121,7 +157,12 @@ export default function AddReplacementDialog({
             size="small"
             sx={{ flex: 1 }}
           />
-          <Button disabled={!replacementAudio} variant="primary" size="small">
+          <Button
+            disabled={!replacementAudio || replacing}
+            variant="primary"
+            size="small"
+            onClick={handleSetAsReplacement}
+          >
             Set as Replacement
           </Button>
         </Stack>

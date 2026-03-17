@@ -58,6 +58,72 @@ export async function spliceAudio(
   return audioBufferToWav(rendered);
 }
 
+/**
+ * Replace a time range in an audio Blob with audio from another Blob.
+ * Returns the new WAV Blob and the duration of the replacement segment.
+ */
+export async function replaceAudioSegment(
+  originalBlob: Blob,
+  startSec: number,
+  endSec: number,
+  replacementBlob: Blob,
+): Promise<{ blob: Blob; replacementDuration: number }> {
+  const audioCtx = new AudioContext();
+  const [origBuf, replBuf] = await Promise.all([
+    audioCtx.decodeAudioData(await originalBlob.arrayBuffer()),
+    audioCtx.decodeAudioData(await replacementBlob.arrayBuffer()),
+  ]);
+
+  const sampleRate = origBuf.sampleRate;
+  const numChannels = origBuf.numberOfChannels;
+
+  // Resample replacement if needed
+  let resampled = replBuf;
+  if (replBuf.sampleRate !== sampleRate || replBuf.numberOfChannels !== numChannels) {
+    const resampledLength = Math.ceil(replBuf.duration * sampleRate);
+    const resampleCtx = new OfflineAudioContext(numChannels, resampledLength, sampleRate);
+    const src = resampleCtx.createBufferSource();
+    src.buffer = replBuf;
+    src.connect(resampleCtx.destination);
+    src.start();
+    resampled = await resampleCtx.startRendering();
+  }
+
+  const startSample = Math.round(startSec * sampleRate);
+  const endSample = Math.round(endSec * sampleRate);
+  const replSamples = resampled.length;
+  const newLength = startSample + replSamples + (origBuf.length - endSample);
+
+  if (newLength <= 0) {
+    await audioCtx.close();
+    return { blob: new Blob([], { type: "audio/wav" }), replacementDuration: resampled.duration };
+  }
+
+  const offlineCtx = new OfflineAudioContext(numChannels, newLength, sampleRate);
+  const newBuffer = offlineCtx.createBuffer(numChannels, newLength, sampleRate);
+
+  for (let ch = 0; ch < numChannels; ch++) {
+    const origData = origBuf.getChannelData(ch);
+    const replData = resampled.getChannelData(ch);
+    const dst = newBuffer.getChannelData(ch);
+    // Before the replaced region
+    dst.set(origData.subarray(0, startSample), 0);
+    // Replacement audio
+    dst.set(replData, startSample);
+    // After the replaced region
+    dst.set(origData.subarray(endSample), startSample + replSamples);
+  }
+
+  const source = offlineCtx.createBufferSource();
+  source.buffer = newBuffer;
+  source.connect(offlineCtx.destination);
+  source.start();
+  const rendered = await offlineCtx.startRendering();
+  await audioCtx.close();
+
+  return { blob: audioBufferToWav(rendered), replacementDuration: resampled.duration };
+}
+
 /** Encode an AudioBuffer as a WAV Blob. */
 function audioBufferToWav(buffer: AudioBuffer): Blob {
   const numChannels = buffer.numberOfChannels;
