@@ -313,7 +313,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         cursorWidth: 4,
         barWidth: 2,
         height,
-        normalize: true,
+        normalize: false,
         plugins,
       };
 
