@@ -7,16 +7,14 @@ import {
 } from "wavesurfer.js/dist/renderer-utils.js";
 
 export interface WaveformRenderRefs {
-  selection: React.RefObject<{ start: number; end: number } | null>;
-  duration: React.RefObject<number>;
-  selectionWaveColor: React.RefObject<string>;
   waveColor: React.RefObject<string>;
   ws: React.RefObject<WaveSurfer | null>;
+  highlights: React.RefObject<{ start: number; end: number; color: string }[]>;
 }
 
 /**
  * Creates a WaveSurfer `renderFunction` that draws bars with a gradient
- * to highlight the selection region in a different color.
+ * to highlight colored regions.
  */
 export function createWaveformRenderer(
   refs: WaveformRenderRefs,
@@ -26,69 +24,80 @@ export function createWaveformRenderer(
     peaks: Array<Float32Array | number[]>,
     ctx: CanvasRenderingContext2D,
   ) => {
-    const sel = refs.selection.current;
-    const dur = refs.duration.current;
-    const selColor = refs.selectionWaveColor.current;
+    const dur = refs.ws.current?.getDuration() || 0;
     const baseColor = refs.waveColor.current;
+    const highlights = refs.highlights.current;
 
-    // If there's a selection with a distinct color, apply a gradient
-    if (sel && dur > 0 && selColor !== baseColor) {
-      applySelectionGradient(ctx, sel, dur, selColor, baseColor, refs.ws);
+    if (highlights && highlights.length > 0 && dur > 0) {
+      applyRegionsGradient(ctx, highlights, dur, baseColor, refs.ws);
     }
 
-    // Draw bars using WaveSurfer utilities
     drawBars(peaks, ctx, wsOptions);
   };
 }
 
 /**
- * Applies a horizontal gradient to `ctx.fillStyle` so that bars inside the
- * selection region use `selColor` and bars outside use `baseColor`.
- * Accounts for zoom by mapping the selection to the canvas chunk's local
- * coordinate space.
+ * Applies a horizontal gradient to `ctx.fillStyle` so that bars inside any
+ * of the given regions use that region's color and bars outside use `baseColor`.
+ * Accounts for zoom by mapping regions to the canvas chunk's local coordinate space.
  */
-function applySelectionGradient(
+function applyRegionsGradient(
   ctx: CanvasRenderingContext2D,
-  sel: { start: number; end: number },
+  regions: { start: number; end: number; color: string }[],
   duration: number,
-  selColor: string,
   baseColor: string,
   wsRef: React.RefObject<WaveSurfer | null>,
 ) {
   // When zoomed, WaveSurfer splits into multiple canvas chunks.
-  // Map selection time range to this chunk's local [0,1] fraction.
+  // Map region time ranges to this chunk's local [0,1] fraction.
   const canvasOffsetCSS = parseFloat(ctx.canvas.style.left) || 0;
   const canvasWidthCSS =
     parseFloat(ctx.canvas.style.width) || ctx.canvas.width;
   const wrapper = wsRef.current?.getWrapper();
   const totalWidthCSS = wrapper?.scrollWidth || canvasWidthCSS;
 
-  const selStartGlobal = sel.start / duration;
-  const selEndGlobal = sel.end / duration;
-
   const chunkStart = canvasOffsetCSS / totalWidthCSS;
   const chunkSpan = canvasWidthCSS / totalWidthCSS;
 
-  // Selection edges as fractions within this canvas chunk
-  const localStart = (selStartGlobal - chunkStart) / chunkSpan;
-  const localEnd = (selEndGlobal - chunkStart) / chunkSpan;
+  // Convert to local coordinates, filter to those overlapping this chunk, sort
+  const localRegions = regions
+    .map((r) => ({
+      localStart: (r.start / duration - chunkStart) / chunkSpan,
+      localEnd: (r.end / duration - chunkStart) / chunkSpan,
+      color: r.color,
+    }))
+    .filter((r) => r.localEnd > 0 && r.localStart < 1)
+    .sort((a, b) => a.localStart - b.localStart);
 
-  // Only apply gradient if selection overlaps this chunk
-  if (localEnd <= 0 || localStart >= 1) return;
+  if (localRegions.length === 0) return;
 
   const eps = 0.0001;
   const gradient = ctx.createLinearGradient(0, 0, ctx.canvas.width, 0);
-  const s = Math.max(0, localStart);
-  const e = Math.min(1, localEnd);
+  let cursor = 0;
 
-  if (s > eps) {
-    gradient.addColorStop(0, baseColor);
-    gradient.addColorStop(s - eps, baseColor);
+  for (const region of localRegions) {
+    const s = Math.max(0, region.localStart);
+    const e = Math.min(1, region.localEnd);
+
+    // Base color from cursor to region start
+    if (s > cursor + eps) {
+      if (cursor === 0) gradient.addColorStop(0, baseColor);
+      gradient.addColorStop(s - eps, baseColor);
+    }
+
+    // Region color
+    gradient.addColorStop(s, region.color);
+    gradient.addColorStop(e, region.color);
+
+    // Sharp transition back to base color after region
+    cursor = e + eps;
+    if (cursor < 1) {
+      gradient.addColorStop(Math.min(cursor, 1), baseColor);
+    }
   }
-  gradient.addColorStop(s, selColor);
-  gradient.addColorStop(e, selColor);
-  if (e < 1 - eps) {
-    gradient.addColorStop(e + eps, baseColor);
+
+  // Base color to the end
+  if (cursor < 1) {
     gradient.addColorStop(1, baseColor);
   }
 

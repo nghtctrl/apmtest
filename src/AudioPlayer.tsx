@@ -58,14 +58,14 @@ export interface AudioPlayerHandle {
   stopRecording: () => void;
   /** Push current audio + selection onto the undo stack */
   pushUndo: () => void;
+  /** Programmatically set the waveform selection region */
+  updateSelection: (sel: { start: number; end: number } | null) => void;
 }
 
 export interface AudioPlayerProps {
   /** Audio source — either a Blob or a URL string */
   audioSource?: Blob;
 
-  /** Point markers rendered on the waveform (reconciled on change) */
-  markers?: AudioMarker[];
   /** Allow user to drag-create a selection on the waveform */
   enableDragSelection?: boolean;
   /** Fired when a marker is clicked (receives the marker's time) */
@@ -95,6 +95,7 @@ export interface AudioPlayerProps {
   /** Called when the drag-selection changes (null when cleared) */
   onSelectionChange?: (
     selection: { start: number; end: number } | null,
+    source: "user" | "undo",
   ) => void;
 
   /** Show a Record button instead of Play when no audio is loaded (default: false) */
@@ -106,7 +107,7 @@ export interface AudioPlayerProps {
   /** Show an undo icon in the controls row (default: true) */
   showUndo?: boolean;
 
-  /** Programmatically create a selection region on the waveform once audio is loaded */
+  /** Create an unclearable selection region on the waveform */
   stickySelection?: { start: number; end: number };
 
   /** Called when the internal audio changes (e.g. recording completed, trash clicked) */
@@ -115,8 +116,8 @@ export interface AudioPlayerProps {
   /** Enable mouse-wheel and touch-pinch zoom on the waveform (default: true) */
   enableZoom?: boolean;
 
-  /** When set, waveform bars inside the selection use this color instead of waveColor */
-  selectionWaveColor?: string;
+  /** Colored regions to highlight on the waveform */
+  highlights?: { start: number; end: number; color: string }[];
 
   /** Children rendered below the waveform (e.g. helper text) */
   children?: React.ReactNode;
@@ -130,7 +131,6 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
   (
     {
       audioSource,
-      markers,
       enableDragSelection = false,
       onMarkerClick,
       waveColor = "#9fc5e8",
@@ -149,7 +149,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       stickySelection,
       onRecordingComplete,
       onAudioChange,
-      selectionWaveColor = "#9fc5e8",
+      highlights = [],
       enableZoom = true,
       children,
     },
@@ -171,6 +171,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       audioSource ?? null,
     );
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+    const isSelectionSticky = !!stickySelection;
 
     // Undo stack
     interface UndoEntry {
@@ -182,27 +183,22 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       setUndoStack((prev) => [...prev, { audio: internalAudio, selection }]);
     };
 
-    // Internal selection state (managed when enableDragSelection is true)
     const [selection, setSelection] = useState<{
       start: number;
       end: number;
-    } | null>(null);
+    } | null>(stickySelection ?? null);
     const selectionRef = useRef(selection);
     useEffect(() => {
       selectionRef.current = selection;
     }, [selection]);
-    const selectionWaveColorRef = useRef(selectionWaveColor);
-    useEffect(() => {
-      selectionWaveColorRef.current = selectionWaveColor;
-    }, [selectionWaveColor]);
     const waveColorRef = useRef(waveColor);
     useEffect(() => {
       waveColorRef.current = waveColor;
     }, [waveColor]);
-    const durationRef = useRef(duration);
+    const highlightsRef = useRef(highlights);
     useEffect(() => {
-      durationRef.current = duration;
-    }, [duration]);
+      highlightsRef.current = highlights;
+    }, [highlights]);
 
     // Stable callback refs so WaveSurfer listeners never go stale
     const onMarkerClickRef = useRef(onMarkerClick);
@@ -230,6 +226,20 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     useEffect(() => {
       onSelectionChangeRef.current = onSelectionChange;
     }, [onSelectionChange]);
+
+    // Helper: only fire onSelectionChange when the value actually changed
+    const fireSelectionChange = (
+      sel: { start: number; end: number } | null,
+      source: "user" | "undo",
+    ) => {
+      const prev = selectionRef.current;
+      if (
+        prev === sel ||
+        (prev && sel && prev.start === sel.start && prev.end === sel.end)
+      )
+        return;
+      onSelectionChangeRef.current?.(sel, source);
+    };
     const onAudioChangeRef = useRef(onAudioChange);
     useEffect(() => {
       onAudioChangeRef.current = onAudioChange;
@@ -283,6 +293,22 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       startRecording,
       stopRecording,
       pushUndo,
+      updateSelection: (sel: { start: number; end: number } | null) => {
+        const rp = regionsRef.current;
+        if (rp) {
+          rp.getRegions().forEach((r) => {
+            if (r.start !== r.end) r.remove();
+          });
+          if (sel) {
+            programmaticRef.current = true;
+            rp.addRegion({ start: sel.start, end: sel.end });
+            programmaticRef.current = false;
+            wsRef.current?.setTime(sel.start);
+          }
+        }
+        setSelection(sel);
+        fireSelectionChange(sel, "user");
+      },
     }));
 
     /* ----- Init WaveSurfer ----- */
@@ -319,11 +345,9 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
 
       const renderFunction = createWaveformRenderer(
         {
-          selection: selectionRef,
-          duration: durationRef,
-          selectionWaveColor: selectionWaveColorRef,
           waveColor: waveColorRef,
           ws: wsRef,
+          highlights: highlightsRef,
         },
         wsOptions,
       );
@@ -382,7 +406,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         });
         const sel = { start: region.start, end: region.end };
         setSelection(sel);
-        onSelectionChangeRef.current?.(sel);
+        fireSelectionChange(sel, "user");
         ws.setTime(region.start);
       });
 
@@ -390,7 +414,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         if (region.start === region.end) return;
         const sel = { start: region.start, end: region.end };
         setSelection(sel);
-        onSelectionChangeRef.current?.(sel);
+        fireSelectionChange(sel, "user");
         ws.setTime(region.start);
       });
 
@@ -418,13 +442,13 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           );
         if (clickedMarker) {
           onMarkerClickRef.current?.(clickedMarker.start);
-        } else if (!stickySelection) {
+        } else if (!isSelectionSticky) {
           // Clear selection regions (but not when initialSelection is set)
           wsRegions.getRegions().forEach((r) => {
             if (r.start !== r.end) r.remove();
           });
           setSelection(null);
-          onSelectionChangeRef.current?.(null);
+          fireSelectionChange(null, "user");
         }
       });
 
@@ -452,24 +476,26 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           suppressDecodeRef.current = false;
           return;
         }
-        // Ignore decode events during warmup/recording (scrolling waveform buffer)
         if (isRecordingRef.current || warmingUpRef.current) return;
         setDuration(d);
         onReadyRef.current?.(d);
-        // Restore selection region if present but not visible (e.g. after undo)
-        const sel = selectionRef.current;
-        if (sel && wsRegions) {
-          const hasRegion = wsRegions
-            .getRegions()
-            .some((r) => r.start !== r.end);
-          if (!hasRegion) {
-            programmaticRef.current = true;
-            wsRegions.addRegion({
-              start: sel.start,
-              end: sel.end,
-            });
-            programmaticRef.current = false;
-          }
+
+        if (!regionsRef.current) return;
+
+        // Clear any pre-existing regions
+        regionsRef.current.getRegions().forEach((r) => {
+          if (r.start !== r.end) r.remove();
+        });
+
+        const prevSelection = selectionRef.current;
+        if (prevSelection && prevSelection.start !== prevSelection.end) {
+          programmaticRef.current = true;
+          regionsRef.current.addRegion({
+            start: prevSelection.start,
+            end: prevSelection.end,
+          });
+          programmaticRef.current = false;
+          ws.setTime(prevSelection.start);
         }
       });
       ws.on("finish", () => setPlaying(false));
@@ -495,31 +521,10 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       return () => URL.revokeObjectURL(url);
     }, [internalAudio]);
 
-    /* ----- Sync markers prop → RegionsPlugin ----- */
-    useEffect(() => {
-      const rp = regionsRef.current;
-      if (!rp) return;
-      // Remove old markers
-      rp.getRegions().forEach((r) => {
-        if (r.start === r.end) r.remove();
-      });
-      // Add new markers
-      (markers ?? []).forEach((m, i) => {
-        rp.addRegion({
-          id: `marker-${i}`,
-          start: m.time,
-          end: m.time,
-          color: m.color ?? "rgba(0, 0, 0, 0.5)",
-          drag: false,
-          resize: false,
-        });
-      });
-    }, [markers, duration]); // depend on duration so markers re-render after audio loads
-
     /* ----- Sync initial selection → RegionsPlugin ----- */
     useEffect(() => {
       const rp = regionsRef.current;
-      if (!rp || !stickySelection || !duration) return;
+      if (!rp || !stickySelection) return;
       // Clear existing non-marker regions
       rp.getRegions().forEach((r) => {
         if (r.start !== r.end) r.remove();
@@ -536,14 +541,14 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         end: stickySelection.end,
       });
       wsRef.current?.setTime(stickySelection.start);
-    }, [stickySelection, duration]);
+    }, [stickySelection]);
 
-    /* ----- Re-render waveform when selection bar color changes ----- */
+    /* ----- Re-render waveform when highlights change ----- */
     useEffect(() => {
       const ws = wsRef.current;
       if (!ws || !duration) return;
       ws.setOptions({});
-    }, [selectionWaveColor, selection, duration, waveColor]);
+    }, [selection, duration, waveColor, highlights]);
 
     // Drive `duration` from a stopwatch while recording
     useStopwatch(isRecording, (t) => setDuration(t));
@@ -576,7 +581,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       setUndoStack(stack);
       setInternalAudio(entry.audio);
       setSelection(entry.selection);
-      onSelectionChangeRef.current?.(entry.selection);
+      fireSelectionChange(entry.selection, "undo");
     };
     const handleCutClick = async () => {
       if (!internalAudio || !selection) return;
@@ -590,7 +595,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         );
         // Clear selection and regions before loading new audio
         setSelection(null);
-        onSelectionChangeRef.current?.(null);
+        fireSelectionChange(null, "user");
         regionsRef.current?.getRegions().forEach((r) => {
           if (r.start !== r.end) r.remove();
         });

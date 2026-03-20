@@ -1,4 +1,4 @@
-import { integer, pgTable, varchar, text, timestamp, serial } from 'drizzle-orm/pg-core';
+import { doublePrecision, integer, pgTable, varchar, text, timestamp, serial } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
     id: serial('id').primaryKey(),
@@ -34,4 +34,15 @@ export const passages = pgTable('passages', {
 
 export const speakers = pgTable('speakers', {
     name: varchar('name', { length: 255 }).primaryKey(),
+});
+
+export const replacements = pgTable('replacements', {
+    id: serial('id').primaryKey(),
+    passageId: integer('passage_id').notNull().references(() => passages.id, { onDelete: 'cascade' }),
+    title: varchar('title', { length: 255 }).notNull(),
+    note: varchar('note', { length: 255 }).notNull().default(''),
+    selectionStart: doublePrecision('selection_start').notNull(),
+    selectionEnd: doublePrecision('selection_end').notNull(),
+    audioKey: varchar('audio_key', { length: 255 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });

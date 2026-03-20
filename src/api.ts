@@ -249,6 +249,81 @@ export async function getPassageSpeaker(
   return data.speaker ?? null;
 }
 
+export interface ReplacementData {
+  id: number;
+  title: string;
+  note: string;
+  selectionStart: number;
+  selectionEnd: number;
+}
+
+export async function saveReplacement(
+  token: string,
+  passageId: number,
+  title: string,
+  note: string,
+  selectionStart: number,
+  selectionEnd: number,
+  audioBlob: Blob,
+): Promise<{ replacement: ReplacementData }> {
+  const params = new URLSearchParams({
+    passageId: String(passageId),
+    title,
+    note,
+    selectionStart: String(selectionStart),
+    selectionEnd: String(selectionEnd),
+  });
+  const res = await fetch(`${API_BASE}/replacements?${params}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: audioBlob,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to save replacement");
+  return data;
+}
+
+export async function getReplacements(
+  token: string,
+  passageId: number,
+): Promise<{ replacements: ReplacementData[] }> {
+  const res = await fetch(`${API_BASE}/replacements?passageId=${passageId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to fetch replacements");
+  return data;
+}
+
+export async function fetchReplacementAudio(
+  token: string,
+  replacementId: number,
+): Promise<Blob | null> {
+  const res = await fetch(
+    `${API_BASE}/replacements?id=${replacementId}&audio=1`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    },
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) return null;
+  return await res.blob();
+}
+
+export async function deleteReplacement(
+  token: string,
+  replacementId: number,
+): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/replacements?id=${replacementId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to delete replacement");
+  return data;
+}
+
 export async function createSpeaker(
   token: string,
   name: string

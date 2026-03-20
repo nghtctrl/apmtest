@@ -124,6 +124,40 @@ export async function replaceAudioSegment(
   return { blob: audioBufferToWav(rendered), replacementDuration: resampled.duration };
 }
 
+/**
+ * Convert a time coordinate from the preview waveform's time domain to the
+ * original audio's time domain.
+ *
+ * When a replacement is spliced into the original audio, the resulting preview
+ * has a different duration. This creates three zones in the preview:
+ *
+ *   1. Before the replacement (0 → replacementStart): unchanged, maps 1:1.
+ *   2. The replacement itself (replacementStart → replacementEndInPreview):
+ *      maps linearly onto [replacementStart, originalSegmentEnd].
+ *   3. After the replacement (replacementEndInPreview → end): shifted by the
+ *      duration difference between the original segment and the replacement.
+ */
+export function mapPreviewTimeToOriginalTime(
+  previewTime: number,
+  replacementStart: number,
+  replacementEndInPreview: number,
+  originalSegmentEnd: number,
+): number {
+  // Before the replacement zone — preview and original are identical
+  if (previewTime <= replacementStart) return previewTime;
+
+  // After the replacement zone — shift by the duration difference
+  if (previewTime >= replacementEndInPreview) {
+    return previewTime + (originalSegmentEnd - replacementEndInPreview);
+  }
+
+  // Within the replacement zone — linearly interpolate between the boundaries
+  const fraction =
+    (previewTime - replacementStart) /
+    (replacementEndInPreview - replacementStart);
+  return replacementStart + fraction * (originalSegmentEnd - replacementStart);
+}
+
 /** Encode an AudioBuffer as a WAV Blob. */
 function audioBufferToWav(buffer: AudioBuffer): Blob {
   const numChannels = buffer.numberOfChannels;
