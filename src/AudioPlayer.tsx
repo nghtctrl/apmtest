@@ -31,7 +31,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import UndoIcon from "@mui/icons-material/Undo";
 import { formatTime } from "./formatTime";
 import { useStopwatch } from "./useStopwatch";
-import { spliceAudio } from "./audioUtils";
+import { spliceAudio, clampSelectionToHighlights } from "./audioUtils";
 import {
   createWaveformRenderer,
   disableProgressSplit,
@@ -394,6 +394,46 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         });
         container.addEventListener("touchend", onTouchEnd, { passive: true });
       }
+
+      // --- Real-time highlight clamping ---
+      wsRegions.on("region-initialized", (region) => {
+        region.on("update", (side) => {
+          if (region.start === region.end) return; // marker
+          const hl = highlightsRef.current;
+          if (!hl.length) return;
+
+          const mode =
+            side === "start" ? "start" : side === "end" ? "end" : "pan";
+          const userSelection = selectionRef.current;
+          //filter out when the selection is highlighted (e.g. replacement dialog)
+          const filtered = userSelection
+            ? hl.filter((h) => h.start >= userSelection.end || h.end <= userSelection.start)
+            : hl;
+          const clamped = clampSelectionToHighlights(
+            { start: region.start, end: region.end },
+            filtered,
+            mode,
+            userSelection,
+          );
+
+          if (!clamped) {
+            const prev = selectionRef.current;
+            if (prev)
+              region.setOptions({ start: prev.start, end: prev.end });
+            else region.remove();
+            return;
+          }
+          if (
+            clamped.start !== region.start ||
+            clamped.end !== region.end
+          ) {
+            region.setOptions({
+              start: clamped.start,
+              end: clamped.end,
+            });
+          }
+        });
+      });
 
       // --- Region events (drag-selection) ---
       wsRegions.on("region-created", (region) => {

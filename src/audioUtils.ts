@@ -266,3 +266,67 @@ export async function compressToMp3(
 
   return new Blob(mp3Chunks, { type: "audio/mpeg" });
 }
+
+/**
+ * Clamp a selection so it stays within a single "free zone" (gap between
+ * highlights).  Returns the clamped selection, or null if invalid.
+ *
+ * @param mode  Which bound is moving:
+ *   - `'end'`   – end handle moving, start is anchor
+ *   - `'start'` – start handle moving, end is anchor
+ *   - `'pan'`   – both bounds moving together
+ * @param prevSel  Previous selection (needed for pan direction detection)
+ */
+export function clampSelectionToHighlights(
+  sel: { start: number; end: number },
+  highlights: { start: number; end: number }[],
+  mode: "start" | "end" | "pan",
+  prevSel?: { start: number; end: number } | null,
+): { start: number; end: number } | null {
+  if (!highlights.length) return sel;
+
+  const sorted = highlights.slice().sort((a, b) => a.start - b.start);
+
+  // Reference point — guaranteed to be in the correct free zone.
+  const ref =
+    mode === "end"
+      ? sel.start // end handle moving → start is anchor
+      : mode === "start"
+        ? sel.end // start handle moving → end is anchor
+        : (prevSel?.start ?? sel.start); // pan → pre-drag position
+
+  // Find free zone [zoneMin, zoneMax] containing the reference.
+  let zoneMin = 0;
+  let zoneMax = Infinity;
+  for (const h of sorted) {
+    if (h.end <= ref) {
+      zoneMin = Math.max(zoneMin, h.end);
+    } else if (h.start >= ref) {
+      zoneMax = Math.min(zoneMax, h.start);
+      break;
+    } else {
+      // ref is inside a highlight
+      return null;
+    }
+  }
+
+  let { start, end } = sel;
+
+  if (mode === "pan" && prevSel) {
+    const width = end - start;
+    if (start > prevSel.start) {
+      // Moving right — clamp the end (leading edge)
+      end = Math.min(end, zoneMax);
+      start = end - width;
+    } else {
+      // Moving left — clamp the start (leading edge)
+      start = Math.max(start, zoneMin);
+      end = start + width;
+    }
+  } else {
+    start = Math.max(start, zoneMin);
+    end = Math.min(end, zoneMax);
+  }
+
+  return start < end ? { start, end } : null;
+}

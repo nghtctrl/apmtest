@@ -79,9 +79,13 @@ function applyRegionsGradient(
     const s = Math.max(0, region.localStart);
     const e = Math.min(1, region.localEnd);
 
-    // Base color from cursor to region start
+    // Base color from cursor to region start (only if there's a gap)
     if (s > cursor + eps) {
-      if (cursor === 0) gradient.addColorStop(0, baseColor);
+      if (cursor === 0) {
+        gradient.addColorStop(0, baseColor);
+      } else {
+        gradient.addColorStop(cursor, baseColor);
+      }
       gradient.addColorStop(s - eps, baseColor);
     }
 
@@ -89,15 +93,12 @@ function applyRegionsGradient(
     gradient.addColorStop(s, region.color);
     gradient.addColorStop(e, region.color);
 
-    // Sharp transition back to base color after region
     cursor = e + eps;
-    if (cursor < 1) {
-      gradient.addColorStop(Math.min(cursor, 1), baseColor);
-    }
   }
 
   // Base color to the end
   if (cursor < 1) {
+    gradient.addColorStop(Math.min(cursor, 1), baseColor);
     gradient.addColorStop(1, baseColor);
   }
 
