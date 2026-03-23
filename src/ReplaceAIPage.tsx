@@ -198,7 +198,10 @@ export default function ReplaceAIPage() {
     setSaving(true);
     try {
       const originalSelection = {
-        start: composedToOriginalTime(data.selection.start, offsetMapRef.current),
+        start: composedToOriginalTime(
+          data.selection.start,
+          offsetMapRef.current,
+        ),
         end: composedToOriginalTime(data.selection.end, offsetMapRef.current),
       };
 
@@ -250,6 +253,14 @@ export default function ReplaceAIPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const isSelectionStartingOverReplacement: () => boolean = () => {
+    if (!selection) return false;
+    const ret = replacements.some(
+      (r) => Math.abs(r.selection.start - selection.start) < 0.5,
+    );
+    return ret;
   };
 
   return (
@@ -338,7 +349,7 @@ export default function ReplaceAIPage() {
         />
 
         {/* Selection range display + Add Replacement button */}
-        {selection && (
+        {selection && !isSelectionStartingOverReplacement() && (
           <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 1 }}>
             <Typography variant="body2">
               {formatTime(selection.start)} - {formatTime(selection.end)}
@@ -369,8 +380,13 @@ export default function ReplaceAIPage() {
               {r.title}
             </Typography>
             <Typography variant="body2">
-              {formatTime(originalToComposedTime(r.selection.start, offsetMapRef.current))} -{" "}
-              {formatTime(originalToComposedTime(r.selection.end, offsetMapRef.current))}
+              {formatTime(
+                originalToComposedTime(r.selection.start, offsetMapRef.current),
+              )}{" "}
+              -{" "}
+              {formatTime(
+                originalToComposedTime(r.selection.end, offsetMapRef.current),
+              )}
             </Typography>
             <Box sx={{ flex: 1 }} />
             <IconButton
@@ -395,7 +411,11 @@ export default function ReplaceAIPage() {
       </Box>
 
       <Box sx={{ px: 2, pb: 3 }}>
-        <Button fullWidth variant="primary" disabled={replacements.length === 0}>
+        <Button
+          fullWidth
+          variant="primary"
+          disabled={replacements.length === 0}
+        >
           Render Replacements
         </Button>
       </Box>
