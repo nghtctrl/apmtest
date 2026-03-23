@@ -424,7 +424,7 @@ export default function ReplaceAIPage() {
       {selection && (
         <AddReplacementDialog
           open={addDialogOpen}
-          audioSource={composedAudio ?? audioBlob ?? undefined}
+          originalComposedAudio={composedAudio ?? audioBlob ?? undefined}
           selection={selection}
           existingHighlights={highlights}
           onCancel={() => setAddDialogOpen(false)}

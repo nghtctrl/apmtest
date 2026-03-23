@@ -18,11 +18,11 @@ import {
 
 interface AddReplacementDialogProps {
   open: boolean;
-  /** The original passage audio */
-  audioSource?: Blob;
+  /** The original composed passage audio */
+  originalComposedAudio?: Blob;
   /** The selection range from the parent ReplaceAIPage */
   selection: { start: number; end: number };
-  /** Highlight regions from existing replacements */
+  /** Highlight regions from pre-existing replacements (in preview/composed time) */
   existingHighlights?: { start: number; end: number; color: string }[];
   onCancel: () => void;
   onContinue: (data: {
@@ -36,7 +36,7 @@ interface AddReplacementDialogProps {
 
 export default function AddReplacementDialog({
   open,
-  audioSource: originalAudio,
+  originalComposedAudio,
   selection,
   existingHighlights = [],
   onCancel,
@@ -52,13 +52,14 @@ export default function AddReplacementDialog({
   const [appliedReplacementAudio, setAppliedReplacementAudio] =
     useState<Blob | null>(null);
   const [previewAudio, setPreviewAudio] = useState<Blob | undefined>(
-    originalAudio,
+    originalComposedAudio,
   );
+  /** This is in preview time */
   const [stickySelection, setStickySelection] = useState(selection);
-  const [hasSetReplacement, setHasEverSetReplacement] = useState(false);
+  const [hasEverSetReplacement, setHasEverSetReplacement] = useState(false);
   const [replacing, setReplacing] = useState(false);
 
-  // Tracks where the replacement ends in the *original* audio's timeline.
+  // Tracks where the replacement ends in the original/starting audio's timeline.
   // Needed because after a replacement the preview waveform has a different
   // duration than the original, so dragged selection coordinates must be mapped
   // back to original-time before calling replaceAudioSegment.
@@ -75,7 +76,7 @@ export default function AddReplacementDialog({
       setName("");
       setReplacementAudio(null);
       setAppliedReplacementAudio(null);
-      setPreviewAudio(originalAudio);
+      setPreviewAudio(originalComposedAudio);
       setStickySelection(selection);
       setHasEverSetReplacement(false);
       setReplacing(false);
@@ -84,7 +85,7 @@ export default function AddReplacementDialog({
   }, [open]);
 
   const handleSetAsReplacement = async () => {
-    if (!replacementAudio || !originalAudio) return;
+    if (!replacementAudio || !originalComposedAudio) return;
 
     setHasEverSetReplacement(true);
     setReplacing(true);
@@ -98,7 +99,7 @@ export default function AddReplacementDialog({
       const endInOriginal = originalSegmentEnd ?? stickySelection.end;
 
       const { blob, replacementDuration } = await replaceAudioSegment(
-        originalAudio,
+        originalComposedAudio,
         startInOriginal,
         endInOriginal,
         replacementAudio,
@@ -131,9 +132,22 @@ export default function AddReplacementDialog({
   };
 
   const canApplyReplacement = Boolean(replacementAudio) && !replacing;
-  const isAudioChanged = previewAudio !== originalAudio;
+  const isAudioChanged = originalSegmentEnd !== null;
   const canContinue =
     Boolean(title.trim()) && isAudioChanged && Boolean(appliedReplacementAudio);
+
+  // Shift existing highlights that fall after the splice point to account
+  // for the duration change introduced by the new replacement.
+  const adjustedHighlights = (() => {
+    if (!isAudioChanged) return existingHighlights;
+    // delta = endInPreview - endInOriginal
+    const delta = stickySelection.end - originalSegmentEnd;
+    return existingHighlights.map((h) =>
+      h.start >= originalSegmentEnd
+        ? { ...h, start: h.start + delta, end: h.end + delta }
+        : h,
+    );
+  })();
 
   return (
     <Dialog open={open} onClose={onCancel} fullWidth maxWidth="sm">
@@ -146,7 +160,7 @@ export default function AddReplacementDialog({
           showReplaceAI={false}
           stickySelection={stickySelection}
           highlights={[
-            ...existingHighlights,
+            ...adjustedHighlights,
             ...(isAudioChanged
               ? [
                   {
@@ -159,13 +173,13 @@ export default function AddReplacementDialog({
           ]}
           onAudioChange={(audio) => {
             setPreviewAudio(audio ?? undefined);
-            if (!audio || audio === originalAudio) {
+            if (!audio || audio === originalComposedAudio) {
               setAppliedReplacementAudio(null);
               setOriginalSegmentEnd(null);
             }
           }}
           onSelectionChange={async (sel, source) => {
-            if (!sel || !originalAudio) return;
+            if (!sel || !originalComposedAudio) return;
             if (source === "user" && appliedReplacementAudio) {
               setReplacing(true);
               // The user dragged the replacement on the preview waveform.
@@ -185,7 +199,7 @@ export default function AddReplacementDialog({
               );
               try {
                 const { blob, replacementDuration } = await replaceAudioSegment(
-                  originalAudio,
+                  originalComposedAudio,
                   startInOriginal,
                   endInOriginal,
                   appliedReplacementAudio,
@@ -263,7 +277,7 @@ export default function AddReplacementDialog({
           <Button
             disabled={!canApplyReplacement}
             variant={
-              canApplyReplacement && !hasSetReplacement ? "primary" : undefined
+              canApplyReplacement && !hasEverSetReplacement ? "primary" : undefined
             }
             size="small"
             onClick={handleSetAsReplacement}
