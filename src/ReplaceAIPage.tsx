@@ -255,11 +255,12 @@ export default function ReplaceAIPage() {
     }
   };
 
-  const isSelectionStartingOverReplacement: () => boolean = () => {
+  const isSelectionStartingOverReplacement = () => {
     if (!selection) return false;
-    const ret = replacements.some(
-      (r) => Math.abs(r.selection.start - selection.start) < 0.5,
-    );
+    const ret = replacements.some((r) => {
+      const startInComposed = originalToComposedTime(r.selection.start, offsetMapRef.current);
+      return Math.abs(startInComposed - selection.start) < 0.2;
+    });
     return ret;
   };
 
