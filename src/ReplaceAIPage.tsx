@@ -242,12 +242,11 @@ export default function ReplaceAIPage() {
     }
   };
 
-  const handleDeleteReplacement = async (index: number) => {
-    const r = replacements[index];
+  const handleDeleteReplacement = async (id: number) => {
     setSaving(true);
     try {
-      await deleteReplacement(token!, r.id);
-      setReplacements((prev) => prev.filter((_, j) => j !== index));
+      await deleteReplacement(token!, id);
+      setReplacements((prev) => prev.filter((r) => r.id !== id));
     } catch {
       // deletion failed — leave list unchanged
     } finally {
@@ -369,7 +368,7 @@ export default function ReplaceAIPage() {
         )}
 
         {/* Replacement rows */}
-        {replacements.map((r, i) => (
+        {[...replacements].sort((a, b) => a.selection.start - b.selection.start).map((r) => (
           <Stack
             key={r.id}
             direction="row"
@@ -392,7 +391,7 @@ export default function ReplaceAIPage() {
             <Box sx={{ flex: 1 }} />
             <IconButton
               size="small"
-              onClick={() => handleDeleteReplacement(i)}
+              onClick={() => handleDeleteReplacement(r.id)}
               disabled={saving}
             >
               <DeleteOutlineIcon fontSize="small" />
