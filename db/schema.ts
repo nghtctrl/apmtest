@@ -1,4 +1,4 @@
-import { doublePrecision, integer, pgTable, varchar, text, timestamp, serial } from 'drizzle-orm/pg-core';
+import { boolean, doublePrecision, integer, pgTable, varchar, text, timestamp, serial } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
     id: serial('id').primaryKey(),
@@ -44,5 +44,6 @@ export const replacements = pgTable('replacements', {
     selectionStart: doublePrecision('selection_start').notNull(),
     selectionEnd: doublePrecision('selection_end').notNull(),
     audioKey: varchar('audio_key', { length: 255 }),
+    original: boolean('original').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });

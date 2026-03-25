@@ -31,13 +31,22 @@ interface AddReplacementDialogProps {
     selection: { start: number; end: number };
     replacementDuration: number;
     audio: Blob;
+    original: boolean;
   }) => void;
   /** When editing, supply the existing replacement data */
   editData?: {
+    id: number;
     title: string;
     note: string;
     audio: Blob;
   };
+  /** Original replacements available to load from history */
+  previousRecordings?: Array<{
+    id: number;
+    title: string;
+    note: string;
+    audio: Blob;
+  }>;
 }
 
 export default function AddReplacementDialog({
@@ -48,6 +57,7 @@ export default function AddReplacementDialog({
   onCancel,
   onContinue,
   editData,
+  previousRecordings = [],
 }: AddReplacementDialogProps) {
   const passagePlayerRef = useRef<AudioPlayerHandle>(null);
   const replacementPlayerRef = useRef<AudioPlayerHandle>(null);
@@ -55,6 +65,9 @@ export default function AddReplacementDialog({
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [name, setName] = useState("");
+  const [selectedHistoryId, setSelectedHistoryId] = useState<number | null>(
+    null,
+  );
   const [replacementAudio, setReplacementAudio] = useState<Blob | null>(null);
   const [appliedReplacementAudio, setAppliedReplacementAudio] =
     useState<Blob | null>(null);
@@ -81,6 +94,7 @@ export default function AddReplacementDialog({
       setTitle(editData?.title ?? "");
       setNote(editData?.note ?? "");
       setName("");
+      setSelectedHistoryId(null);
       setReplacementAudio(null);
       setAppliedReplacementAudio(editData?.audio ?? null);
       setPreviewAudio(originalComposedAudio);
@@ -126,15 +140,28 @@ export default function AddReplacementDialog({
   };
 
   const handleContinue = () => {
+    const trimmedTitle = title.trim();
+    const trimmedNote = note.trim();
+    const isOriginal = editData
+      ? !previousRecordings.some(
+          (r) =>
+            r.id !== editData.id &&
+            r.title === trimmedTitle &&
+            r.note === trimmedNote,
+        )
+      : !previousRecordings.some(
+          (r) => r.title === trimmedTitle && r.note === trimmedNote,
+        );
     onContinue({
-      title: title.trim(),
-      note: note.trim(),
+      title: trimmedTitle,
+      note: trimmedNote,
       selection: {
         start: stickySelection.start,
         end: originalSegmentEnd ?? stickySelection.end,
       },
       replacementDuration: stickySelection.end - stickySelection.start,
       audio: appliedReplacementAudio!,
+      original: isOriginal,
     });
   };
 
@@ -234,16 +261,33 @@ export default function AddReplacementDialog({
           }}
         />
 
-        {/* ─── Previous Replacement Recordings (disabled) ───── */}
+        {/* ─── Previous Replacement Recordings ──────────────── */}
         <TextField
           select
           fullWidth
-          disabled
+          disabled={!!editData || previousRecordings.length === 0}
           label="Previous Replacement Recordings"
-          value=""
+          value={selectedHistoryId ?? ""}
+          onChange={(e) => {
+            const id = e.target.value ? Number(e.target.value) : null;
+            setSelectedHistoryId(id);
+            if (id) {
+              const rec = previousRecordings.find((r) => r.id === id);
+              if (rec) {
+                setTitle(rec.title);
+                setNote(rec.note);
+                setReplacementAudio(rec.audio);
+              }
+            }
+          }}
           sx={{ mt: 2 }}
         >
-          <MenuItem value="">None</MenuItem>
+          {previousRecordings.map((r) => (
+            <MenuItem key={r.id} value={r.id}>
+              {r.title}
+              {r.note ? ` — ${r.note}` : ""}
+            </MenuItem>
+          ))}
         </TextField>
 
         {/* ─── Title & Note ─────────────────────────────────── */}
@@ -268,7 +312,12 @@ export default function AddReplacementDialog({
         {/* ─── Recorder player ──────────────────────────────── */}
         <AudioPlayer
           ref={replacementPlayerRef}
-          audioSource={editData?.audio}
+          audioSource={
+            (selectedHistoryId
+              ? previousRecordings.find((r) => r.id === selectedHistoryId)
+                  ?.audio
+              : undefined) ?? editData?.audio
+          }
           height={60}
           showReplaceAI={false}
           enableDragSelection

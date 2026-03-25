@@ -255,6 +255,7 @@ export interface ReplacementData {
   note: string;
   selectionStart: number;
   selectionEnd: number;
+  original: boolean;
 }
 
 export async function saveReplacement(
@@ -265,6 +266,7 @@ export async function saveReplacement(
   selectionStart: number,
   selectionEnd: number,
   audioBlob: Blob,
+  original: boolean,
 ): Promise<{ replacement: ReplacementData }> {
   const params = new URLSearchParams({
     passageId: String(passageId),
@@ -272,6 +274,7 @@ export async function saveReplacement(
     note,
     selectionStart: String(selectionStart),
     selectionEnd: String(selectionEnd),
+    original: String(original),
   });
   const res = await fetch(`${API_BASE}/replacements?${params}`, {
     method: "POST",
@@ -332,6 +335,7 @@ export async function updateReplacement(
   selectionStart: number,
   selectionEnd: number,
   audioBlob?: Blob,
+  original?: boolean,
 ): Promise<{ replacement: ReplacementData }> {
   const params = new URLSearchParams({
     id: String(replacementId),
@@ -340,6 +344,9 @@ export async function updateReplacement(
     selectionStart: String(selectionStart),
     selectionEnd: String(selectionEnd),
   });
+  if (original !== undefined) {
+    params.set("original", String(original));
+  }
   const res = await fetch(`${API_BASE}/replacements?${params}`, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}` },

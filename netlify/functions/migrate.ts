@@ -61,6 +61,25 @@ export default async function handler(_req: Request, _context: Context) {
     )
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS replacements (
+      id SERIAL PRIMARY KEY,
+      passage_id INTEGER NOT NULL REFERENCES passages(id) ON DELETE CASCADE,
+      title VARCHAR(255) NOT NULL,
+      note VARCHAR(255) NOT NULL DEFAULT '',
+      selection_start DOUBLE PRECISION NOT NULL,
+      selection_end DOUBLE PRECISION NOT NULL,
+      audio_key VARCHAR(255),
+      original BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    ALTER TABLE replacements
+    ADD COLUMN IF NOT EXISTS original BOOLEAN NOT NULL DEFAULT true
+  `;
+
   // Seed a default project if none exists
   const existing = await sql`SELECT id FROM projects LIMIT 1`;
   if (existing.length === 0) {

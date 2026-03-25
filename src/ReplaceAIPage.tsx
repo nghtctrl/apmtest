@@ -44,6 +44,7 @@ interface Replacement {
   note: string;
   selection: { start: number; end: number };
   audio: Blob;
+  original: boolean;
 }
 
 interface OffsetEntry {
@@ -120,6 +121,7 @@ export default function ReplaceAIPage() {
               note: r.note,
               selection: { start: r.selectionStart, end: r.selectionEnd },
               audio: audio,
+              original: r.original,
             };
           }),
         );
@@ -198,6 +200,7 @@ export default function ReplaceAIPage() {
     selection: { start: number; end: number };
     replacementDuration: number;
     audio: Blob;
+    original: boolean;
   }) => {
     setSaving(true);
     try {
@@ -229,6 +232,7 @@ export default function ReplaceAIPage() {
           newSelection.start,
           newSelection.end,
           mp3Blob,
+          data.original,
         );
         setReplacements((prev) =>
           prev.map((r) =>
@@ -239,6 +243,7 @@ export default function ReplaceAIPage() {
                   note: data.note,
                   audio: mp3Blob ?? r.audio,
                   selection: newSelection,
+                  original: data.original,
                 }
               : r,
           ),
@@ -252,6 +257,7 @@ export default function ReplaceAIPage() {
           newSelection.start,
           newSelection.end,
           mp3Blob!,
+          data.original,
         );
         setReplacements((prev) => [
           ...prev,
@@ -261,6 +267,7 @@ export default function ReplaceAIPage() {
             note: data.note,
             selection: newSelection,
             audio: mp3Blob!,
+            original: data.original,
           },
         ]);
       }
@@ -298,6 +305,14 @@ export default function ReplaceAIPage() {
     setEditingReplacement(r);
     setAddDialogOpen(true);
   };
+
+  const previousRecordings = useMemo(
+    () =>
+      replacements
+        .filter((r) => r.original)
+        .map((r) => ({ id: r.id, title: r.title, note: r.note, audio: r.audio })),
+    [replacements],
+  );
 
   type ReplacementRow =
     | { type: "existing"; replacement: Replacement; sortKey: number }
@@ -523,6 +538,7 @@ export default function ReplaceAIPage() {
           }}
           onContinue={handleDialogContinue}
           editData={editingReplacement ?? undefined}
+          previousRecordings={previousRecordings}
         />
       )}
     </Box>
