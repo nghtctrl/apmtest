@@ -49,8 +49,17 @@ export default function LoginPage() {
         alignItems: "center",
         justifyContent: "center",
         bgcolor: "grey.100",
+        position: "relative",
       }}
     >
+      <Box sx={{ position: "absolute", top: 16, right: 16 }}>
+        <a href="https://www.netlify.com">
+          <img
+            src="https://www.netlify.com/assets/badges/netlify-badge-light.svg"
+            alt="Deploys by Netlify"
+          />
+        </a>
+      </Box>
       <Card sx={{ width: 400, maxWidth: "90vw" }}>
         <CardContent>
           <Typography variant="h5" textAlign="center" gutterBottom>
