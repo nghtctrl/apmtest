@@ -432,7 +432,7 @@ export default function ReplaceAIPage() {
                 sx={{ flex: 1, display: "flex", justifyContent: "flex-end" }}
               >
                 <Button
-                  variant={replacements.length === 0 ? "primary" : undefined}
+                  variant="primary"
                   sx={{ width: "100%", maxWidth: 500 }}
                   onClick={() => setAddDialogOpen(true)}
                 >
@@ -500,7 +500,7 @@ export default function ReplaceAIPage() {
       <Box sx={{ px: 2, pb: 3 }}>
         <Button
           fullWidth
-          variant="primary"
+          variant={selection ? undefined : "primary"}
           disabled={replacements.length === 0}
         >
           Render Replacements
