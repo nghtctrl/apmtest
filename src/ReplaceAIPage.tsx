@@ -13,6 +13,7 @@ import GraphicEqIcon from "@mui/icons-material/GraphicEq";
 import CloudDoneOutlinedIcon from "@mui/icons-material/CloudDoneOutlined";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { useAuth } from "./AuthContext";
 import {
@@ -20,6 +21,7 @@ import {
   fetchReplacementAudio,
   getReplacements,
   saveReplacement,
+  updateReplacement,
   deleteReplacement,
 } from "./api";
 import { AudioPlayer, type AudioPlayerHandle } from "./AudioPlayer";
@@ -91,6 +93,8 @@ export default function ReplaceAIPage() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [replacements, setReplacements] = useState<Replacement[]>([]);
   const [saving, setSaving] = useState(false);
+  const [editingReplacement, setEditingReplacement] =
+    useState<Replacement | null>(null);
 
   const [composedAudio, setComposedAudio] = useState<Blob | null>(null);
   const [highlights, setHighlights] = useState<
@@ -188,7 +192,7 @@ export default function ReplaceAIPage() {
     navigate("/record", { state });
   };
 
-  const handleAddReplacement = async (data: {
+  const handleDialogContinue = async (data: {
     title: string;
     note: string;
     selection: { start: number; end: number };
@@ -197,7 +201,8 @@ export default function ReplaceAIPage() {
   }) => {
     setSaving(true);
     try {
-      const originalSelection = {
+      const isEdit = !!editingReplacement;
+      const newSelection = {
         start: composedToOriginalTime(
           data.selection.start,
           offsetMapRef.current,
@@ -205,38 +210,69 @@ export default function ReplaceAIPage() {
         end: composedToOriginalTime(data.selection.end, offsetMapRef.current),
       };
 
-      const mp3Blob = await compressToMp3(
-        new File([data.audio], "replacement.webm", { type: data.audio.type }),
-        64,
-      );
+      const audioChanged = !isEdit || data.audio !== editingReplacement.audio;
+      const mp3Blob = audioChanged
+        ? await compressToMp3(
+            new File([data.audio], "replacement.webm", {
+              type: data.audio.type,
+            }),
+            64,
+          )
+        : undefined;
 
-      const { replacement } = await saveReplacement(
-        token!,
-        passageId,
-        data.title,
-        data.note,
-        originalSelection.start,
-        originalSelection.end,
-        mp3Blob,
-      );
+      if (isEdit) {
+        const { replacement } = await updateReplacement(
+          token!,
+          editingReplacement.id,
+          data.title,
+          data.note,
+          newSelection.start,
+          newSelection.end,
+          mp3Blob,
+        );
+        setReplacements((prev) =>
+          prev.map((r) =>
+            r.id === replacement.id
+              ? {
+                  ...r,
+                  title: data.title,
+                  note: data.note,
+                  audio: mp3Blob ?? r.audio,
+                  selection: newSelection,
+                }
+              : r,
+          ),
+        );
+      } else {
+        const { replacement } = await saveReplacement(
+          token!,
+          passageId,
+          data.title,
+          data.note,
+          newSelection.start,
+          newSelection.end,
+          mp3Blob!,
+        );
+        setReplacements((prev) => [
+          ...prev,
+          {
+            id: replacement.id,
+            title: data.title,
+            note: data.note,
+            selection: newSelection,
+            audio: mp3Blob!,
+          },
+        ]);
+      }
 
-      setReplacements((prev) => [
-        ...prev,
-        {
-          id: replacement.id,
-          title: data.title,
-          note: data.note,
-          selection: originalSelection,
-          audio: mp3Blob,
-        },
-      ]);
-      setAddDialogOpen(false);
       playerRef.current?.updateSelection({
         start: data.selection.start,
         end: data.selection.start + data.replacementDuration,
       });
+      setAddDialogOpen(false);
+      setEditingReplacement(null);
     } catch {
-      // save failed — dialog stays open
+      // save/update failed — dialog stays open
     } finally {
       setSaving(false);
     }
@@ -254,10 +290,22 @@ export default function ReplaceAIPage() {
     }
   };
 
+  const handleEditClick = (r: Replacement) => {
+    setSelection({
+      start: originalToComposedTime(r.selection.start, offsetMapRef.current),
+      end: originalToComposedTime(r.selection.end, offsetMapRef.current),
+    });
+    setEditingReplacement(r);
+    setAddDialogOpen(true);
+  };
+
   const isSelectionStartingOverReplacement = () => {
     if (!selection) return false;
     const ret = replacements.some((r) => {
-      const startInComposed = originalToComposedTime(r.selection.start, offsetMapRef.current);
+      const startInComposed = originalToComposedTime(
+        r.selection.start,
+        offsetMapRef.current,
+      );
       return Math.abs(startInComposed - selection.start) < 0.2;
     });
     return ret;
@@ -368,36 +416,48 @@ export default function ReplaceAIPage() {
         )}
 
         {/* Replacement rows */}
-        {[...replacements].sort((a, b) => a.selection.start - b.selection.start).map((r) => (
-          <Stack
-            key={r.id}
-            direction="row"
-            alignItems="center"
-            spacing={2}
-            sx={{ mt: 1 }}
-          >
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {r.title}
-            </Typography>
-            <Typography variant="body2">
-              {formatTime(
-                originalToComposedTime(r.selection.start, offsetMapRef.current),
-              )}{" "}
-              -{" "}
-              {formatTime(
-                originalToComposedTime(r.selection.end, offsetMapRef.current),
-              )}
-            </Typography>
-            <Box sx={{ flex: 1 }} />
-            <IconButton
-              size="small"
-              onClick={() => handleDeleteReplacement(r.id)}
-              disabled={saving}
+        {[...replacements]
+          .sort((a, b) => a.selection.start - b.selection.start)
+          .map((r) => (
+            <Stack
+              key={r.id}
+              direction="row"
+              alignItems="center"
+              spacing={2}
+              sx={{ mt: 1 }}
             >
-              <DeleteOutlineIcon fontSize="small" />
-            </IconButton>
-          </Stack>
-        ))}
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {r.title}
+              </Typography>
+              <Typography variant="body2">
+                {formatTime(
+                  originalToComposedTime(
+                    r.selection.start,
+                    offsetMapRef.current,
+                  ),
+                )}{" "}
+                -{" "}
+                {formatTime(
+                  originalToComposedTime(r.selection.end, offsetMapRef.current),
+                )}
+              </Typography>
+              <Box sx={{ flex: 1 }} />
+              <IconButton
+                size="small"
+                onClick={() => handleEditClick(r)}
+                disabled={saving}
+              >
+                <EditIcon fontSize="small" />
+              </IconButton>
+              <IconButton
+                size="small"
+                onClick={() => handleDeleteReplacement(r.id)}
+                disabled={saving}
+              >
+                <DeleteOutlineIcon fontSize="small" />
+              </IconButton>
+            </Stack>
+          ))}
 
         {/* Spacer */}
         <Box sx={{ flex: 1 }} />
@@ -420,15 +480,22 @@ export default function ReplaceAIPage() {
         </Button>
       </Box>
 
-      {/* ─── Add Replacement Dialog ───────────────────────── */}
+      {/* ─── Add / Edit Replacement Dialog ────────────────── */}
       {selection && (
         <AddReplacementDialog
           open={addDialogOpen}
           originalComposedAudio={composedAudio ?? audioBlob ?? undefined}
           selection={selection}
-          existingHighlights={highlights}
-          onCancel={() => setAddDialogOpen(false)}
-          onContinue={handleAddReplacement}
+          existingHighlights={highlights.filter(
+            // Filter out the existing highlight when editing a replacement
+            (h) => h.start !== selection.start && h.end !== selection.end,
+          )}
+          onCancel={() => {
+            setAddDialogOpen(false);
+            setEditingReplacement(null);
+          }}
+          onContinue={handleDialogContinue}
+          editData={editingReplacement ?? undefined}
         />
       )}
     </Box>

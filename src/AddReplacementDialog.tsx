@@ -32,6 +32,12 @@ interface AddReplacementDialogProps {
     replacementDuration: number;
     audio: Blob;
   }) => void;
+  /** When editing, supply the existing replacement data */
+  editData?: {
+    title: string;
+    note: string;
+    audio: Blob;
+  };
 }
 
 export default function AddReplacementDialog({
@@ -41,6 +47,7 @@ export default function AddReplacementDialog({
   existingHighlights = [],
   onCancel,
   onContinue,
+  editData,
 }: AddReplacementDialogProps) {
   const passagePlayerRef = useRef<AudioPlayerHandle>(null);
   const replacementPlayerRef = useRef<AudioPlayerHandle>(null);
@@ -71,16 +78,16 @@ export default function AddReplacementDialog({
   // Reset form state when dialog opens
   useEffect(() => {
     if (open) {
-      setTitle("");
-      setNote("");
+      setTitle(editData?.title ?? "");
+      setNote(editData?.note ?? "");
       setName("");
       setReplacementAudio(null);
-      setAppliedReplacementAudio(null);
+      setAppliedReplacementAudio(editData?.audio ?? null);
       setPreviewAudio(originalComposedAudio);
       setStickySelection(selection);
-      setHasEverSetReplacement(false);
+      setHasEverSetReplacement(!!editData);
       setReplacing(false);
-      setOriginalSegmentEnd(null);
+      setOriginalSegmentEnd(editData ? selection.end : null); //todo is selection.end right?
     }
   }, [open]);
 
@@ -131,7 +138,10 @@ export default function AddReplacementDialog({
     });
   };
 
-  const canApplyReplacement = Boolean(replacementAudio) && !replacing;
+  const canApplyReplacement =
+    Boolean(replacementAudio) &&
+    !replacing &&
+    replacementAudio !== editData?.audio;
   const isAudioChanged = originalSegmentEnd !== null;
   const canContinue =
     Boolean(title.trim()) && isAudioChanged && Boolean(appliedReplacementAudio);
@@ -151,7 +161,9 @@ export default function AddReplacementDialog({
 
   return (
     <Dialog open={open} onClose={onCancel} fullWidth maxWidth="sm">
-      <DialogTitle>Add Replacement</DialogTitle>
+      <DialogTitle>
+        {editData ? "Edit Replacement" : "Add Replacement"}
+      </DialogTitle>
       <DialogContent>
         <AudioPlayer
           ref={passagePlayerRef}
@@ -173,7 +185,7 @@ export default function AddReplacementDialog({
           ]}
           onAudioChange={(audio) => {
             setPreviewAudio(audio ?? undefined);
-            if (!audio || audio === originalComposedAudio) {
+            if (!audio || (audio === originalComposedAudio && !editData)) {
               setAppliedReplacementAudio(null);
               setOriginalSegmentEnd(null);
             }
@@ -256,6 +268,7 @@ export default function AddReplacementDialog({
         {/* ─── Recorder player ──────────────────────────────── */}
         <AudioPlayer
           ref={replacementPlayerRef}
+          audioSource={editData?.audio}
           height={60}
           showReplaceAI={false}
           enableDragSelection
@@ -277,7 +290,9 @@ export default function AddReplacementDialog({
           <Button
             disabled={!canApplyReplacement}
             variant={
-              canApplyReplacement && !hasEverSetReplacement ? "primary" : undefined
+              canApplyReplacement && !hasEverSetReplacement
+                ? "primary"
+                : undefined
             }
             size="small"
             onClick={handleSetAsReplacement}

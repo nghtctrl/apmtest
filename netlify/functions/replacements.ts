@@ -133,6 +133,41 @@ export default async function handler(req: Request, _context: Context) {
       });
     }
 
+    // PUT /replacements?id=1&title=...&note=...&selectionStart=0.5&selectionEnd=1.2
+    // Body: audio blob (optional — omit or send empty body to keep existing audio)
+    if (method === "PUT") {
+      const id = Number(url.searchParams.get("id"));
+      const title = url.searchParams.get("title") || "";
+      const note = url.searchParams.get("note") || "";
+      const selectionStart = Number(url.searchParams.get("selectionStart"));
+      const selectionEnd = Number(url.searchParams.get("selectionEnd"));
+
+      if (!id) return jsonRes({ error: "id is required" }, 400);
+      if (!title) return jsonRes({ error: "title is required" }, 400);
+
+      await sql`
+        UPDATE replacements
+        SET title = ${title}, note = ${note},
+            selection_start = ${selectionStart}, selection_end = ${selectionEnd}
+        WHERE id = ${id}
+      `;
+
+      const body = await req.arrayBuffer();
+      if (body && body.byteLength > 0) {
+        const blobKey = `replacement-${id}.mp3`;
+        await store.set(blobKey, body as ArrayBuffer, {
+          metadata: { replacementId: String(id), uploadedBy: String(user.userId) },
+        });
+        await sql`
+          UPDATE replacements SET audio_key = ${blobKey} WHERE id = ${id}
+        `;
+      }
+
+      return jsonRes({
+        replacement: { id, title, note, selectionStart, selectionEnd },
+      });
+    }
+
     // DELETE /replacements?id=1
     if (method === "DELETE") {
       const id = Number(url.searchParams.get("id"));

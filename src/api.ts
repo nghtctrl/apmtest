@@ -324,6 +324,32 @@ export async function deleteReplacement(
   return data;
 }
 
+export async function updateReplacement(
+  token: string,
+  replacementId: number,
+  title: string,
+  note: string,
+  selectionStart: number,
+  selectionEnd: number,
+  audioBlob?: Blob,
+): Promise<{ replacement: ReplacementData }> {
+  const params = new URLSearchParams({
+    id: String(replacementId),
+    title,
+    note,
+    selectionStart: String(selectionStart),
+    selectionEnd: String(selectionEnd),
+  });
+  const res = await fetch(`${API_BASE}/replacements?${params}`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` },
+    body: audioBlob ?? new Blob(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to update replacement");
+  return data;
+}
+
 export async function createSpeaker(
   token: string,
   name: string
