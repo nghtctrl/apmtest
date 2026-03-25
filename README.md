@@ -2,49 +2,49 @@
 
 ## Prerequisites
 
-You will need a [Netlify](https://www.netlify.com/) and a [Neon](https://neon.com/) account (you’ll connect Neon later).
+You will need [Netlify](https://www.netlify.com/) and [Neon](https://neon.com/) accounts (you will need a Neon account to claim your database on Netlify, as explained below). They both offer free-tier access. You will also need access to the project `.env` file, which includes the `DATABASE_URL` for the shared dummy database. Please contact us for `.env` file.
 
-## Setup
+## One-Time Setup
 
 1. Fork this repository.
 
-2. Install dependencies:
+2. Place the provided `.env` file in the root directory of the project.
+
+3. Install dependencies:
 
    ```bash
    npm install
    ```
 
-3. Start the Netlify development environment:
+4. Start the Netlify development environment:
 
    ```bash
    npx netlify dev
    ```
 
-4. Follow the interactive prompts:
+5. Complete the setup prompts:
 
-   * Create & configure a new Netlify project
+   * Select "Create & configure a new Netlify project"
    * Authorize Netlify when prompted
-   * Accept the default configurations (you can customize the project name if desired)
+   * Accept the default configurations (you may customize the project name if desired)
 
-5. Run database migrations:
-
-   ```bash
-   npm run db:migrate
-   ```
-
-6. Once setup is complete, your app will be deployed at: `https://<project-name>.netlify.app`
-
-7. In the Netlify dashboard, navigate to **Extensions → Neon** and claim your database (it will expire if it is no claimed).
+You may see warnings about "no database found." This refers to the new *empty* database created when setting up a Netlify project (see notes below). These warnings can be safely ignored for local development.
 
 ## Local Development
 
-To run and test the app locally at any time:
+To run the app locally at any time (after completing one-time setup):
 
 ```bash
 npx netlify dev
 ```
 
-## Important
+## Contributing
 
-* Database interactions in the local development environment affect the production database (e.g., creating a new user account, creating a new APM project).
-* By default, Netlify automatically deploys every commit pushed to the `main` branch. Each deployment uses up monthly free-tier credits. You can configure this setting on the Netlify dashboard.
+Send a pull request.
+
+## Important Notes
+
+* The one-time setup creates a new Netlify project with its own *empty* database (it will also need to be [claimed](https://docs.netlify.com/build/data-and-storage/netlify-db/#claim-your-database) within 7 days). As a result, your deployment will not be connected to the shared dummy database, while your local development environment will be via `.env` file.
+* If you plan to host your own apmtest deployment on Netlify, you may want to clone our dummy database to populate your empty database.
+* Any database operations performed on the local development environment (e.g., creating new users or APM projects) will directly affect the shared dummy database.
+* Netlify automatically deploys every commit pushed to the `main` branch. These deployments count toward your monthly free-tier usage. You can adjust this behavior in the Netlify dashboard.
