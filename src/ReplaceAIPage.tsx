@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Box,
@@ -299,17 +299,36 @@ export default function ReplaceAIPage() {
     setAddDialogOpen(true);
   };
 
-  const isSelectionStartingOverReplacement = () => {
-    if (!selection) return false;
-    const ret = replacements.some((r) => {
-      const startInComposed = originalToComposedTime(
-        r.selection.start,
-        offsetMapRef.current,
-      );
-      return Math.abs(startInComposed - selection.start) < 0.2;
-    });
-    return ret;
-  };
+  type ReplacementRow =
+    | { type: "existing"; replacement: Replacement; sortKey: number }
+    | { type: "add"; sortKey: number };
+
+  const replacementRows = useMemo(() => {
+    const rows: ReplacementRow[] = replacements.map((r) => ({
+      type: "existing" as const,
+      replacement: r,
+      sortKey: r.selection.start,
+    }));
+
+    if (selection) {
+      const isSelectionStartingOverReplacement = replacements.some((r) => {
+        const startInComposed = originalToComposedTime(
+          r.selection.start,
+          offsetMapRef.current,
+        );
+        return Math.abs(startInComposed - selection.start) < 0.2;
+      });
+      if (!isSelectionStartingOverReplacement) {
+        const selOrigStart = composedToOriginalTime(
+          selection.start,
+          offsetMapRef.current,
+        );
+        rows.push({ type: "add", sortKey: selOrigStart });
+      }
+    }
+
+    return rows.sort((a, b) => a.sortKey - b.sortKey);
+  }, [replacements, selection]);
 
   return (
     <Box
@@ -396,68 +415,76 @@ export default function ReplaceAIPage() {
           highlights={highlights}
         />
 
-        {/* Selection range display + Add Replacement button */}
-        {selection && !isSelectionStartingOverReplacement() && (
-          <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 1 }}>
-            <Typography variant="body2">
-              {formatTime(selection.start)} - {formatTime(selection.end)}
-            </Typography>
-            <Box sx={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
-              <Button
-                variant={replacements.length === 0 ? "primary" : undefined}
-                sx={{ width: "100%", maxWidth: 500 }}
-                onClick={() => setAddDialogOpen(true)}
-              >
-                <AddIcon />
-                Add Replacement
-              </Button>
-            </Box>
-          </Stack>
-        )}
-
-        {/* Replacement rows */}
-        {[...replacements]
-          .sort((a, b) => a.selection.start - b.selection.start)
-          .map((r) => (
+        {/* Replacement rows + Add Replacement row in chronological order */}
+        {replacementRows.map((row) =>
+          row.type === "add" ? (
             <Stack
-              key={r.id}
+              key="add-replacement"
+              direction="row"
+              alignItems="center"
+              spacing={2}
+              sx={{ mt: 1 }}
+            >
+              <Typography variant="body2">
+                {formatTime(selection!.start)} - {formatTime(selection!.end)}
+              </Typography>
+              <Box
+                sx={{ flex: 1, display: "flex", justifyContent: "flex-end" }}
+              >
+                <Button
+                  variant={replacements.length === 0 ? "primary" : undefined}
+                  sx={{ width: "100%", maxWidth: 500 }}
+                  onClick={() => setAddDialogOpen(true)}
+                >
+                  <AddIcon />
+                  Add Replacement
+                </Button>
+              </Box>
+            </Stack>
+          ) : (
+            <Stack
+              key={row.replacement.id}
               direction="row"
               alignItems="center"
               spacing={2}
               sx={{ mt: 1 }}
             >
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {r.title}
+                {row.replacement.title}
               </Typography>
               <Typography variant="body2">
                 {formatTime(
                   originalToComposedTime(
-                    r.selection.start,
+                    row.replacement.selection.start,
                     offsetMapRef.current,
                   ),
                 )}{" "}
                 -{" "}
                 {formatTime(
-                  originalToComposedTime(r.selection.end, offsetMapRef.current),
+                  originalToComposedTime(
+                    row.replacement.selection.end,
+                    offsetMapRef.current,
+                  ),
                 )}
               </Typography>
               <Box sx={{ flex: 1 }} />
               <IconButton
                 size="small"
-                onClick={() => handleEditClick(r)}
+                onClick={() => handleEditClick(row.replacement)}
                 disabled={saving}
               >
                 <EditIcon fontSize="small" />
               </IconButton>
               <IconButton
                 size="small"
-                onClick={() => handleDeleteReplacement(r.id)}
+                onClick={() => handleDeleteReplacement(row.replacement.id)}
                 disabled={saving}
               >
                 <DeleteOutlineIcon fontSize="small" />
               </IconButton>
             </Stack>
-          ))}
+          ),
+        )}
 
         {/* Spacer */}
         <Box sx={{ flex: 1 }} />
