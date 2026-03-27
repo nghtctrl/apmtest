@@ -21,7 +21,6 @@
     "@neondatabase/serverless": "^1.0.2",
     "@netlify/blobs": "^10.7.0",
     "@netlify/functions": "^5.1.2",
-    "@netlify/neon": "^0.1.2",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.1",
     "jsonwebtoken": "^9.0.3",
