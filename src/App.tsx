@@ -91,7 +91,7 @@ const theme = createTheme({
           },
           "&:disabled": {
             background: "#f0f0f0",
-          }
+          },
         },
       },
       variants: [
@@ -125,11 +125,49 @@ const theme = createTheme({
         },
       ],
     },
+    MuiInputBase: {
+      styleOverrides: {
+        root: {
+          borderRadius: "8px !important",
+        },
+      },
+    },
+    MuiAccordion: {
+      styleOverrides: {
+        root: {
+          borderRadius: "8px",
+          borderColor: "rgba(0, 0, 0, .2)",
+          "&::before": {
+            display: "none",
+          },
+          "&.Mui-disabled": {
+            backgroundColor: "#f0f0f0",
+            border: 0
+          },
+        },
+      },
+    },
+    MuiAccordionSummary: {
+      styleOverrides: {
+        root: {
+          minHeight: "40px",
+          "&.Mui-expanded": {
+            minHeight: "40px",
+          },
+        },
+        content: {
+          margin: "0",
+          "&.Mui-expanded": {
+            margin: "0",
+          },
+        },
+      },
+    },
     MuiIconButton: {
       styleOverrides: {
         root: {
-          color: "rgba(0, 0, 0, 0.7)"
-        }
+          color: "rgba(0, 0, 0, 0.7)",
+        },
       },
       variants: [
         {

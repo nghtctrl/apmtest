@@ -1,14 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  MenuItem,
+  List,
+  ListItemButton,
+  ListItemText,
   Stack,
   TextField,
+  Typography,
 } from "@mui/material";
+import { ExpandMore } from "@mui/icons-material";
 
 import { AudioPlayer, type AudioPlayerHandle } from "./AudioPlayer";
 import {
@@ -68,6 +75,7 @@ export default function AddReplacementDialog({
   const [selectedHistoryId, setSelectedHistoryId] = useState<number | null>(
     null,
   );
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [replacementAudio, setReplacementAudio] = useState<Blob | null>(null);
   const [appliedReplacementAudio, setAppliedReplacementAudio] =
     useState<Blob | null>(null);
@@ -262,33 +270,39 @@ export default function AddReplacementDialog({
         />
 
         {/* ─── Previous Replacement Recordings ──────────────── */}
-        <TextField
-          select
-          fullWidth
+        <Accordion
+          variant="outlined"
           disabled={!!editData || previousRecordings.length === 0}
-          label="Previous Replacement Recordings"
-          value={selectedHistoryId ?? ""}
-          onChange={(e) => {
-            const id = e.target.value ? Number(e.target.value) : null;
-            setSelectedHistoryId(id);
-            if (id) {
-              const rec = previousRecordings.find((r) => r.id === id);
-              if (rec) {
-                setTitle(rec.title);
-                setNote(rec.note);
-                setReplacementAudio(rec.audio);
-              }
-            }
-          }}
+          expanded={historyExpanded}
+          onChange={(_, expanded) => setHistoryExpanded(expanded)}
           sx={{ mt: 2 }}
         >
-          {previousRecordings.map((r) => (
-            <MenuItem key={r.id} value={r.id}>
-              {r.title}
-              {r.note ? ` — ${r.note}` : ""}
-            </MenuItem>
-          ))}
-        </TextField>
+          <AccordionSummary expandIcon={<ExpandMore />}>
+            <Typography>
+              Previous Recordings
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails sx={{ p: 0 }}>
+            <List dense disablePadding sx={{ height: 100, overflowY: "auto" }}>
+              {previousRecordings.map((r) => (
+                <ListItemButton
+                  key={r.id}
+                  selected={selectedHistoryId === r.id}
+                  onClick={() => {
+                    setSelectedHistoryId(r.id);
+                    setTitle(r.title);
+                    setNote(r.note);
+                    setReplacementAudio(r.audio);
+                  }}
+                >
+                  <ListItemText
+                    primary={`${r.title}${r.note ? ` — ${r.note}` : ""}`}
+                  />
+                </ListItemButton>
+              ))}
+            </List>
+          </AccordionDetails>
+        </Accordion>
 
         {/* ─── Title & Note ─────────────────────────────────── */}
         <Stack direction="row" spacing={2} sx={{ my: 2 }}>
