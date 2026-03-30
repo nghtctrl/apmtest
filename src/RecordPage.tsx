@@ -162,6 +162,7 @@ function RecordPageInner() {
       setCompressing(false);
       setUploading(true);
       await uploadAudio(token, passageId, mp3Blob, selectedSpeaker!);
+      await createPassageVersion(token!, passageId, mp3Blob);
 
       // Set audio source for playback
       setAudioBlob(mp3Blob);
