@@ -23,6 +23,7 @@ import { useAuth } from "./AuthContext";
 import {
   uploadAudio,
   fetchAudio,
+  createPassageVersion,
   getSpeakers,
   getPassageSpeaker,
   type Speaker,
@@ -241,6 +242,7 @@ function RecordPageInner() {
       setCompressing(false);
       setUploading(true);
       await uploadAudio(token!, passageId, mp3Blob, selectedSpeaker!);
+      await createPassageVersion(token!, passageId, mp3Blob);
       setAudioBlob(mp3Blob);
       setSnackMsg("Audio saved!");
     } catch (err) {
