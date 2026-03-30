@@ -751,7 +751,7 @@ function RenameDialog({
   const handleConfirm = () => onConfirm(trimmedValue);
 
   return (
-    <Dialog open={open} onClose={onCancel} fullWidth maxWidth="xs">
+    <Dialog open={open} onClose={(_, reason) => reason !== "backdropClick" && onCancel()} fullWidth maxWidth="xs">
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <TextField

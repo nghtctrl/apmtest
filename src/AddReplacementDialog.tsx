@@ -187,7 +187,7 @@ export default function AddReplacementDialog({
   })();
 
   return (
-    <Dialog open={open} onClose={onCancel} fullWidth maxWidth="sm">
+    <Dialog open={open} onClose={(_, reason) => reason !== "backdropClick" && onCancel()} fullWidth maxWidth="sm">
       <DialogTitle>
         {editData ? "Edit Replacement" : "Add Replacement"}
       </DialogTitle>

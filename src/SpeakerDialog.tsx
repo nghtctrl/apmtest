@@ -59,7 +59,7 @@ export default function SpeakerDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
+    <Dialog open={open} onClose={(_, reason) => reason !== "backdropClick" && onClose()} fullWidth maxWidth="xs">
       <DialogTitle>Select or Add Speaker</DialogTitle>
       <DialogContent>
         <Autocomplete
