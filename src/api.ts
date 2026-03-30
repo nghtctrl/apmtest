@@ -357,6 +357,68 @@ export async function updateReplacement(
   return data;
 }
 
+export interface PassageVersion {
+  id: number;
+  passageId: number;
+  audioKey: string;
+  renderSource: string | null;
+  note: string;
+  createdAt: string;
+}
+
+export async function createPassageVersion(
+  token: string,
+  passageId: number,
+  blob: Blob,
+  options?: {
+    renderSource?: boolean;
+    activate?: boolean;
+  },
+): Promise<{ version: PassageVersion }> {
+  const params = new URLSearchParams({
+    passageId: String(passageId),
+  });
+  // Pass renderSource="" to signal "auto-populate from current passage audio_key"
+  if (options?.renderSource) params.set("renderSource", "");
+  if (options?.activate === false) params.set("activate", "0");
+  const res = await fetch(`${API_BASE}/passage-versions?${params}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: blob,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to create passage version");
+  return data;
+}
+
+export async function activatePassageVersion(
+  token: string,
+  versionId: number,
+): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/passage-versions?id=${versionId}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to activate version");
+  return data;
+}
+
+export async function fetchVersionAudio(
+  token: string,
+  versionId: number,
+): Promise<Blob | null> {
+  const res = await fetch(
+    `${API_BASE}/passage-versions?id=${versionId}&audio=1`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    },
+  );
+  if (res.status === 404 || !res.ok) return null;
+  return await res.blob();
+}
+
 export async function createSpeaker(
   token: string,
   name: string

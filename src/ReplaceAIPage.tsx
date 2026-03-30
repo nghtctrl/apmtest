@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
+  Backdrop,
   Box,
   Button,
   CircularProgress,
+  FormControlLabel,
   IconButton,
   Menu,
   Stack,
+  Switch,
   Typography,
 } from "@mui/material";
 import GraphicEqIcon from "@mui/icons-material/GraphicEq";
@@ -17,18 +20,23 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { useAuth } from "./AuthContext";
 import {
+  activatePassageVersion,
+  createPassageVersion,
   fetchAudio,
   fetchReplacementAudio,
   getReplacements,
   saveReplacement,
   updateReplacement,
   deleteReplacement,
+  type PassageVersion,
 } from "./api";
 import { AudioPlayer, type AudioPlayerHandle } from "./AudioPlayer";
 import AddReplacementDialog from "./AddReplacementDialog";
 import PageHeader from "./PageHeader";
 import { formatTime } from "./formatTime";
-import { replaceAudioSegment, compressToMp3 } from "./audioUtils";
+import Axios from "axios";
+import { replaceAudioSegment, compressToMp3, toBase64 } from "./audioUtils";
+import { pollTask } from "./pollTask";
 
 interface ReplaceAIPageState {
   passageId: number;
@@ -96,6 +104,9 @@ export default function ReplaceAIPage() {
   const [saving, setSaving] = useState(false);
   const [editingReplacement, setEditingReplacement] =
     useState<Replacement | null>(null);
+  const [rendering, setRendering] = useState(false);
+  const [rendered, setRendered] = useState<{ version: PassageVersion; blob: Blob } | null>(null);
+  const [showRendered, setShowRendered] = useState(false);
 
   const [composedAudio, setComposedAudio] = useState<Blob | null>(null);
   const [highlights, setHighlights] = useState<
@@ -297,6 +308,66 @@ export default function ReplaceAIPage() {
     }
   };
 
+  const buildReplacementPayloads = async (reps: Replacement[]) => {
+    return Promise.all(
+      reps.map(async (r) => {
+        const file = new File([r.audio], "replacement.mp3", {
+          type: r.audio.type,
+        });
+        const dataUrl = await toBase64(file);
+        return {
+          start: r.selection.start,
+          end: r.selection.end,
+          audio_format: "wav",
+          audio_base64: dataUrl.split(",")[1],
+        };
+      }),
+    );
+  };
+
+  const renderReplacements = async () => {
+    if (!audioBlob) return;
+    const file = new File([audioBlob], "passage.wav", { type: audioBlob.type });
+    setRendering(true);
+    try {
+      const base64String = await toBase64(file);
+      const replacementPayloads = await buildReplacementPayloads(replacements);
+      const payload = {
+        fileName: file.name,
+        contentType: file.type,
+        data: base64String.split(",")[1],
+        replacements: JSON.stringify(replacementPayloads),
+      };
+      const res = await Axios.post(
+        "https://api-dev.audioprojectmanager.org/api/aero/infilling",
+        payload,
+      );
+      const taskId: string = res?.data;
+
+      const renderedBlob = await pollTask(
+        `https://api-dev.audioprojectmanager.org/api/aero/infilling/${taskId}`,
+      );
+      const { version } = await createPassageVersion(
+        token!,
+        passageId,
+        renderedBlob,
+        { renderSource: true, activate: false },
+      );
+      setRendered({ version, blob: renderedBlob });
+      setShowRendered(true);
+    } catch (err) {
+      console.error("renderReplacements error:", err);
+    } finally {
+      setRendering(false);
+    }
+  };
+
+  const handleUseThisVersion = async () => {
+    if (!rendered) return;
+    await activatePassageVersion(token!, rendered.version.id);
+    navigate("/record", { state });
+  };
+
   const handleEditClick = (r: Replacement) => {
     setSelection({
       start: originalToComposedTime(r.selection.start, offsetMapRef.current),
@@ -310,7 +381,12 @@ export default function ReplaceAIPage() {
     () =>
       replacements
         .filter((r) => r.original)
-        .map((r) => ({ id: r.id, title: r.title, note: r.note, audio: r.audio })),
+        .map((r) => ({
+          id: r.id,
+          title: r.title,
+          note: r.note,
+          audio: r.audio,
+        })),
     [replacements],
   );
 
@@ -365,6 +441,12 @@ export default function ReplaceAIPage() {
             gap: 1,
           }}
         >
+          <Backdrop
+            open={rendering}
+            sx={{ zIndex: (theme) => theme.zIndex.modal + 1 }}
+          >
+            <CircularProgress color="inherit" />
+          </Backdrop>
           <GraphicEqIcon />
           <Typography sx={{ fontWeight: 600 }}>Replace (AI)</Typography>
 
@@ -402,9 +484,7 @@ export default function ReplaceAIPage() {
             anchorEl={menuAnchorEl}
             open={Boolean(menuAnchorEl)}
             onClose={() => setMenuAnchorEl(null)}
-          >
-            {/* Future menu items */}
-          </Menu>
+          ></Menu>
         </Box>
       </PageHeader>
 
@@ -422,104 +502,139 @@ export default function ReplaceAIPage() {
         {/* Audio player */}
         <AudioPlayer
           ref={playerRef}
-          audioSource={composedAudio ?? audioBlob ?? undefined}
+          audioSource={
+            showRendered
+              ? rendered!.blob
+              : (composedAudio ?? audioBlob ?? undefined)
+          }
           height={80}
           enableDragSelection
           showReplaceAI={false}
-          onSelectionChange={setSelection}
-          highlights={highlights}
+          onSelectionChange={showRendered ? undefined : setSelection}
+          highlights={showRendered ? [] : highlights}
         />
 
-        {/* Replacement rows + Add Replacement row in chronological order */}
-        {replacementRows.map((row) =>
-          row.type === "add" ? (
-            <Stack
-              key="add-replacement"
-              direction="row"
-              alignItems="center"
-              spacing={2}
-              sx={{ mt: 1 }}
-            >
-              <Typography variant="body2">
-                {formatTime(selection!.start)} - {formatTime(selection!.end)}
-              </Typography>
-              <Box
-                sx={{ flex: 1, display: "flex", justifyContent: "flex-end" }}
-              >
-                <Button
-                  variant="primary"
-                  sx={{ width: "100%", maxWidth: 500 }}
-                  onClick={() => setAddDialogOpen(true)}
-                >
-                  <AddIcon />
-                  Add Replacement
-                </Button>
-              </Box>
-            </Stack>
-          ) : (
-            <Stack
-              key={row.replacement.id}
-              direction="row"
-              alignItems="center"
-              spacing={2}
-              sx={{ mt: 1 }}
-            >
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {row.replacement.title}
-              </Typography>
-              <Typography variant="body2">
-                {formatTime(
-                  originalToComposedTime(
-                    row.replacement.selection.start,
-                    offsetMapRef.current,
-                  ),
-                )}{" "}
-                -{" "}
-                {formatTime(
-                  originalToComposedTime(
-                    row.replacement.selection.end,
-                    offsetMapRef.current,
-                  ),
-                )}
-              </Typography>
-              <Box sx={{ flex: 1 }} />
-              <IconButton
-                size="small"
-                onClick={() => handleEditClick(row.replacement)}
-                disabled={saving}
-              >
-                <EditIcon fontSize="small" />
-              </IconButton>
-              <IconButton
-                size="small"
-                onClick={() => handleDeleteReplacement(row.replacement.id)}
-                disabled={saving}
-              >
-                <DeleteOutlineIcon fontSize="small" />
-              </IconButton>
-            </Stack>
-          ),
+        {/* Rendered audio toggle */}
+        {rendered && (
+          <FormControlLabel
+            control={
+              <Switch
+                checked={showRendered}
+                onChange={(_, checked) => setShowRendered(checked)}
+              />
+            }
+            label="See Rendered Audio"
+            sx={{ ml: "auto", mr: 0 }}
+          />
         )}
+
+        {/* Replacement rows + Add Replacement row in chronological order */}
+        {!showRendered &&
+          replacementRows.map((row) =>
+            row.type === "add" ? (
+              <Stack
+                key="add-replacement"
+                direction="row"
+                alignItems="center"
+                spacing={2}
+                sx={{ mt: 1 }}
+              >
+                <Typography variant="body2">
+                  {formatTime(selection!.start)} - {formatTime(selection!.end)}
+                </Typography>
+                <Box
+                  sx={{ flex: 1, display: "flex", justifyContent: "flex-end" }}
+                >
+                  <Button
+                    variant="primary"
+                    sx={{ width: "100%", maxWidth: 500 }}
+                    onClick={() => setAddDialogOpen(true)}
+                  >
+                    <AddIcon />
+                    Add Replacement
+                  </Button>
+                </Box>
+              </Stack>
+            ) : (
+              <Stack
+                key={row.replacement.id}
+                direction="row"
+                alignItems="center"
+                spacing={2}
+                sx={{ mt: 1 }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {row.replacement.title}
+                </Typography>
+                <Typography variant="body2">
+                  {formatTime(
+                    originalToComposedTime(
+                      row.replacement.selection.start,
+                      offsetMapRef.current,
+                    ),
+                  )}{" "}
+                  -{" "}
+                  {formatTime(
+                    originalToComposedTime(
+                      row.replacement.selection.end,
+                      offsetMapRef.current,
+                    ),
+                  )}
+                </Typography>
+                <Box sx={{ flex: 1 }} />
+                <IconButton
+                  size="small"
+                  onClick={() => handleEditClick(row.replacement)}
+                  disabled={saving}
+                >
+                  <EditIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => handleDeleteReplacement(row.replacement.id)}
+                  disabled={saving}
+                >
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </Stack>
+            ),
+          )}
 
         {/* Spacer */}
         <Box sx={{ flex: 1 }} />
 
         {/* Helper text */}
-        {!selection && replacements.length === 0 && (
-          <Typography variant="body1" sx={{ textAlign: "center", my: 24 }}>
+        {showRendered && (
+          <Typography variant="body2" sx={{ textAlign: "center", my: 16 }}>
+            Review and click Use This Version when ready.
+            <br />
+            Toggle{" "}
+            <Switch size="small" checked sx={{ verticalAlign: "middle" }} /> if
+            you need to go back to editing.
+          </Typography>
+        )}
+        {!showRendered && !selection && replacements.length === 0 && (
+          <Typography variant="body2" sx={{ textAlign: "center", my: 16 }}>
             Drag to mark the parts you want to replace
           </Typography>
         )}
       </Box>
 
       <Box sx={{ px: 2, pb: 3 }}>
-        <Button
-          fullWidth
-          variant={selection ? undefined : "primary"}
-          disabled={replacements.length === 0}
-        >
-          Render Replacements
-        </Button>
+        {showRendered ? (
+          <Button fullWidth variant="primary" onClick={handleUseThisVersion}>
+            Use This Version
+          </Button>
+        ) : (
+          <Button
+            fullWidth
+            variant={selection ? undefined : "primary"}
+            disabled={replacements.length === 0 || rendered !== null}
+            onClick={renderReplacements}
+          >
+            Render Replacements
+          </Button>
+        )}
       </Box>
 
       {/* ─── Add / Edit Replacement Dialog ────────────────── */}

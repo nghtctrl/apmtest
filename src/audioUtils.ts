@@ -330,3 +330,23 @@ export function clampSelectionToHighlights(
 
   return start < end ? { start, end } : null;
 }
+
+/** Read a File/Blob as a base-64 data-URL string. */
+export function toBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
+}
+
+/** Decode a base-64 string into a Blob. */
+export function fromBase64(base64: string, type = "audio/wav"): Blob {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type });
+}

@@ -36,6 +36,15 @@ export const speakers = pgTable('speakers', {
     name: varchar('name', { length: 255 }).primaryKey(),
 });
 
+export const passageVersions = pgTable('passage_versions', {
+    id: serial('id').primaryKey(),
+    passageId: integer('passage_id').notNull().references(() => passages.id, { onDelete: 'cascade' }),
+    audioKey: varchar('audio_key', { length: 255 }).notNull(),
+    renderSource: varchar('render_source', { length: 255 }),
+    note: varchar('note', { length: 255 }).notNull().default(''),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 export const replacements = pgTable('replacements', {
     id: serial('id').primaryKey(),
     passageId: integer('passage_id').notNull().references(() => passages.id, { onDelete: 'cascade' }),
